@@ -10,6 +10,7 @@ function usage()
 	echo "    test:          rum unit tests" 
 	echo "    perfo:         run performance tests" 
 	echo "    cdash:         perform unit tests with gcov and send results to cdash" 
+	echo "    eclipse:       generate eclipse projet" 
 	echo "Build options:"
 	echo "    debug/release: build with debuging informations or not" 
 	echo "    clang:         build with clang instead of gcc" 
@@ -22,6 +23,7 @@ function usage()
 	echo "help: output command help and quit" 
 	exit 0
 }
+possible_args="clean depclean test perfo cdash eclipse debug release clang gcov valgrind callgrind ftrace verbose help"
 
 function clean()
 {
@@ -64,6 +66,10 @@ function cdash()
 	$command_opts ctest -V -D Experimental -D NightlyMemCheck
 }
 
+function eclipse()
+{
+	cmake . -G"Eclipse CDT4 - Unix Makefiles" -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_COMPILER_ARG1=-std=c++11
+}
 
 callgrind=0
 valgrind=0
@@ -72,6 +78,16 @@ test=0
 
 cmake_opts="-DCTEST_USE_LAUNCHERS=ON"
 command_opts=""
+
+#test command line arguments
+for arg in "$@"
+do
+	if [[ ! $possible_args =~ $arg ]]
+	then
+		usage
+		exit 1 
+	fi
+done
 
 #Explore each argument to set options
 for arg in "$@"
@@ -137,6 +153,9 @@ do
 	then
 		target=1
 		cdash
+	elif [[ "_$arg" == "_eclipse" ]]
+	then
+		eclipse
 	fi
 
 	if [[ "_$arg" == "_help" ]]
