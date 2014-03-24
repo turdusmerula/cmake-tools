@@ -1,5 +1,10 @@
 #!/bin/bash
 
+#Build script version 1.0.0
+
+#TODO: add target to build rpm/deb/... install packet
+#TODO: add ftrace
+#TODO: add an update from github of tools
 
 function usage()
 {
@@ -11,6 +16,7 @@ function usage()
 	echo "    perfo:         run performance tests" 
 	echo "    cdash:         perform unit tests with gcov and send results to cdash" 
 	echo "    eclipse:       generate eclipse projet" 
+	echo "	  upgrate:		 upgrade tools with latest version from github"
 	echo "Build options:"
 	echo "    debug/release: build with debuging informations or not" 
 	echo "    clang:         build with clang instead of gcc" 
@@ -42,7 +48,8 @@ function depclean()
 	find . -type f \( -name "*.cmake" ! -name "CTestConfig.cmake" \) -exec rm -f {} \;
 	find . -type f -name "*.db" -exec rm -f {} \;
 	find . -type f -name "*.defs" -exec rm -f {} \;
-	rm -rf lib*.deb Testing
+	find . -type f -name "DartConfiguration.tcl" -exec rm -f {} \;
+		rm -rf lib*.deb Testing
 	rm -rf tmp
 }
 
@@ -58,7 +65,8 @@ function performance_tests()
 #Unit tests
 function unit_tests()
 {
-	$command_opts ctest -V		
+	#	$command_opts ctest -V		
+	$command_opts make test		
 }
 
 function cdash()
@@ -69,6 +77,11 @@ function cdash()
 function eclipse()
 {
 	cmake . -G"Eclipse CDT4 - Unix Makefiles" -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_COMPILER_ARG1=-std=c++11
+}
+
+function upgrade()
+{
+	wget https://raw.githubusercontent.com/turdusmerula/ftrace/master/build.sh 	
 }
 
 callgrind=0
@@ -121,10 +134,12 @@ do
 	fi
 done
 
-if [[ "_$buildtype" != "_" ]]
+if [[ "_$buildtype" == "_" ]]
 then
-	cmake_opts="$cmake_opts -DCMAKE_BUILD_TYPE=$buildtype"
+	buildtype=Debug
 fi
+
+cmake_opts="$cmake_opts -DCMAKE_BUILD_TYPE=$buildtype"
 
 #Build makefiles
 cmake . $cmake_opts
@@ -166,7 +181,7 @@ do
 done
 
 #Nothing was asked so by default we build the code
-if [[ "_$target" == "0" ]]
+if [[ "_$target" == "_0" ]]
 then
 	make
 fi

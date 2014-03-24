@@ -1,5 +1,10 @@
 #Those tests are disabled by default
 
+#Set build path relative to each project
+set(CMAKE_BUILD_DIRECTORY Build/)
+set(LIBRARY_OUTPUT_PATH Build/lib)
+set(EXECUTABLE_OUTPUT_PATH Build/bin)
+
 cmake_minimum_required(VERSION 2.8)
 project(helloworld-perfo)
 

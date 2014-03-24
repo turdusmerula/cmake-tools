@@ -1,6 +1,6 @@
 #include <cppunit/extensions/HelperMacros.h>
 
-#include <util/hello.h>
+#include <hello.h>
 
 class HelloTest : public CppUnit::TestFixture
 {

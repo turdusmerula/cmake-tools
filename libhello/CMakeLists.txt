@@ -1,6 +1,11 @@
 cmake_minimum_required(VERSION 2.8)
 project(libhello)
 
+#Set build path relative to each project
+set(CMAKE_BUILD_DIRECTORY Build/)
+set(LIBRARY_OUTPUT_PATH Build/lib)
+set(EXECUTABLE_OUTPUT_PATH Build/bin)
+
 #Add included packages here
 find_package(Boost 1.53 COMPONENTS filesystem regex system REQUIRED)
 
@@ -22,6 +27,3 @@ add_library(${PROJECT_NAME} SHARED ${sources})
 
 #Libraries to link inside the lib
 target_link_libraries(${PROJECT_NAME} ${Boost_LIBRARIES})
-
-#Build Tests
-add_subdirectory(tests/tu)

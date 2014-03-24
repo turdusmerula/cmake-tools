@@ -4,6 +4,7 @@ project(cmake-tools)
 #Set build path relative to each project
 set(CMAKE_BUILD_DIRECTORY Build/)
 set(LIBRARY_OUTPUT_PATH Build/lib)
+set(EXECUTABLE_OUTPUT_PATH Build/bin)
 
 #Set default compiler flags
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11")
@@ -38,6 +39,8 @@ message("Profile type ${PROFILE_TYPE}")
 add_subdirectory(libhello)
 add_subdirectory(helloworld)
 
-#Enable unit tests
+#Enable tests
 include( CTest )
-enable_testing()
+add_subdirectory(libhello/tests/tu)
+add_subdirectory(helloworld/tests/perfo)
+add_subdirectory(helloworld/tests/tu)
