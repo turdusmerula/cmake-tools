@@ -82,7 +82,7 @@ function eclipse()
 function upgrade()
 {
 	mv $0 $0.bak
-	wget https://raw.githubusercontent.com/turdusmerula/ftrace/master/build.sh
+	wget https://raw.githubusercontent.com/turdusmerula/cmake-tools/master/build.sh
 	chmod +x build.sh
 }
 
