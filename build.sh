@@ -29,7 +29,7 @@ function usage()
 	echo "help: output command help and quit" 
 	exit 0
 }
-possible_args="clean depclean test perfo cdash eclipse debug release clang gcov valgrind callgrind ftrace verbose help"
+possible_args="clean depclean test perfo cdash eclipse upgrade debug release clang gcov valgrind callgrind ftrace verbose help"
 
 function clean()
 {
@@ -81,7 +81,9 @@ function eclipse()
 
 function upgrade()
 {
-	wget https://raw.githubusercontent.com/turdusmerula/ftrace/master/build.sh 	
+	mv $0 $0.bak
+	wget https://raw.githubusercontent.com/turdusmerula/ftrace/master/build.sh
+	chmod +x build.sh
 }
 
 callgrind=0
