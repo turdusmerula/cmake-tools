@@ -16,7 +16,7 @@ function usage()
 	echo "    perfo:         run performance tests" 
 	echo "    cdash:         perform unit tests with gcov and send results to cdash" 
 	echo "    eclipse:       generate eclipse projet" 
-	echo "	  upgrate:		 upgrade tools with latest version from github"
+	echo "    upgrate:		 upgrade tools with latest version from github"
 	echo "Build options:"
 	echo "    debug/release: build with debuging informations or not" 
 	echo "    clang:         build with clang instead of gcc" 
@@ -171,6 +171,9 @@ do
 	elif [[ "_$arg" == "_eclipse" ]]
 	then
 		eclipse
+	elif [[ "_$arg" == "_upgrade" ]]
+	then
+		upgrade
 	fi
 
 	if [[ "_$arg" == "_help" ]]
