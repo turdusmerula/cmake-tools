@@ -1,10 +1,13 @@
 #!/bin/bash
 
-#Build script version 1.0.0
+set -x
 
-#TODO: add target to build rpm/deb/... install packet
-#TODO: add ftrace
-#TODO: add an update from github of tools
+#Build script version 1.0.0
+#History:
+#Version 1.0.0: first working and released version of the script
+
+
+#TODO add a configuration file for env path
 
 function usage()
 {
@@ -12,24 +15,142 @@ function usage()
 	echo "Available targets:"
 	echo "    clean:         clean sources" 
 	echo "    depclean:      clean sources and makefiles" 
-	echo "    test:          rum unit tests" 
-	echo "    perfo:         run performance tests" 
+	echo "    build:         run all tests" 
+	echo "    run-tests:     run all tests" 
+	echo "    run-tu:        run unit tests" 
+	echo "    run-perfo:     run performance tests" 
+	echo "    run-it:        run integration tests" 
+	echo "    package:       create source and install packages" 
+	echo "    install:       install packages on the system" 
 	echo "    cdash:         perform unit tests with gcov and send results to cdash" 
-	echo "    eclipse:       generate eclipse projet" 
-	echo "    upgrate:		 upgrade tools with latest version from github"
+	echo "    eclipse:       generate eclipse project" 
+	echo "    upgrade-tools: upgrade tools with latest version from github"
 	echo "Build options:"
-	echo "    debug/release: build with debuging informations or not" 
-	echo "    clang:         build with clang instead of gcc" 
-	echo "    gcov:          add covering informations, imply debug" 
-	echo "    valgrind:      run valgrind tests, imply debug" 
-	echo "    callgrind:     run callgrind tests, imply debug" 
-	echo "    ftrace:        run callgrind tests, imply debug" 
-	echo "    verbose:       enable verbose mode" 
+	echo "    -release:      build with release informations (by default debug build is made with debug informations)" 
+	echo "    -clang:        build with clang instead of gcc" 
+	echo "    -gcov:         add covering informations, imply debug" 
+	echo "    -valgrind:     run tests through valgrind" 
+	echo "    -callgrind:    run tests through callgrind" 
+	echo "    -ftrace:       add ftrace instrumentation on build and tests" 
+	echo "    -verbose:      enable verbose mode" 
 	echo
 	echo "help: output command help and quit" 
 	exit 0
 }
-possible_args="clean depclean test perfo cdash eclipse upgrade debug release clang gcov valgrind callgrind ftrace verbose help"
+possible_args="clean depclean build run-tests run-tu run-perfo run-it cdash eclipse upgrade-tools -release -clang -gcov -valgrind -callgrind -ftrace -verbose help"
+
+#Options
+release=0 
+clang=0
+gcov=0
+callgrind=0
+valgrind=0
+ftrace=0
+verbose=0 
+
+#Targets
+clean=0
+depclean=0 
+build=0
+run_tu=0 
+run_perfo=0 
+run_it=0 
+cdash=0 
+eclipse=0
+upgrade_tools=0
+
+target=0
+
+cmake_opts="-DCTEST_USE_LAUNCHERS=ON"
+make_opts=""
+command=""
+
+#test command line arguments
+for arg in "$@"
+do
+	if [[ ! $possible_args =~ $arg ]]
+	then
+		usage
+		exit 1 
+	fi
+done
+
+#Explore each argument to set options
+for arg in "$@"
+do
+	if [[ "_$arg" == "_clean" ]]
+	then
+		clean=1
+		target=1
+	elif [[ "_$arg" == "_depclean" ]]
+	then
+		depclean=1
+		target=1
+	elif [[ "_$arg" == "_depclean" ]]
+	then
+		build=1
+		target=1
+	elif [[ "_$arg" == "_run-tests" ]]
+	then
+		run_tu=1
+		run_perfo=1
+		run_it=1
+		build=1		
+		target=1
+	elif [[ "_$arg" == "_run-tu" ]]
+	then
+		run_tu=1
+		target=1
+		build=1		
+	elif [[ "_$arg" == "_run-perfo" ]]
+	then
+		run_perfo=1
+		target=1
+		build=1		
+	elif [[ "_$arg" == "_run-it" ]]
+	then
+		run_it=1
+		target=1
+		build=1
+	elif [[ "_$arg" == "_cdash" ]]
+	then
+		cdash=1
+		target=1
+	elif [[ "_$arg" == "_eclipse" ]]
+	then
+		eclipse=1
+		target=1
+	elif [[ "_$arg" == "_upgrade-tools" ]]
+	then
+		upgrade_tools=1
+		target=1
+	elif [[ "_$arg" == "_-release" ]]
+	then
+		release=1
+	elif [[ "_$arg" == "_-clang" ]]
+	then
+		clang=1
+	elif [[ "_$arg" == "_-gcov" ]]
+	then
+		gcov=1
+	elif [[ "_$arg" == "_-valgrind" ]]
+	then
+		valgrind=1
+	elif [[ "_$arg" == "_-callgrind" ]]
+	then
+		callgrind=1
+	elif [[ "_$arg" == "_-ftrace" ]]
+	then
+		ftrace=1
+	elif [[ "_$arg" == "_-verbose" ]]
+	then
+		verbose=1
+	elif [[ "_$arg" == "_help" ]]
+	then
+		usage
+		exit 0
+	fi
+done
 
 function clean()
 {
@@ -49,12 +170,9 @@ function depclean()
 	find . -type f -name "*.db" -exec rm -f {} \;
 	find . -type f -name "*.defs" -exec rm -f {} \;
 	find . -type f -name "DartConfiguration.tcl" -exec rm -f {} \;
-		rm -rf lib*.deb Testing
+	rm -rf lib*.deb Testing
 	rm -rf tmp
 }
-
-#valgrind_memcheck="/usr/bin/valgrind --tool=callgrind --dump-instr=yes --simulate-cache=yes --callgrind-out-file=../../Testing/callgrind.out.%p"
-valgrind_callgrind="/usr/bin/valgrind --tool=callgrind --dump-instr=yes --simulate-cache=yes --callgrind-out-file=../../Testing/callgrind.out.%p"
 
 #Performance tests 
 function performance_tests()
@@ -65,8 +183,7 @@ function performance_tests()
 #Unit tests
 function unit_tests()
 {
-	#	$command_opts ctest -V		
-	$command_opts make test		
+	find . -type f -name "*-unit-test" -exec $command {} \; 
 }
 
 function cdash()
@@ -86,108 +203,92 @@ function upgrade()
 	chmod +x build.sh
 }
 
-callgrind=0
-valgrind=0
-perfo=0
-test=0
 
-cmake_opts="-DCTEST_USE_LAUNCHERS=ON"
-command_opts=""
+#Output anything outputted by the test program if the test should fail.
+CTEST_OUTPUT_ON_FAILURE=true
 
-#test command line arguments
-for arg in "$@"
-do
-	if [[ ! $possible_args =~ $arg ]]
-	then
-		usage
-		exit 1 
-	fi
-done
-
-#Explore each argument to set options
-for arg in "$@"
-do
-	if [[ "_$arg" == "_debug" ]]
-	then
-		buildtype=Debug
-	elif [[ "_$arg" == "_release" ]]
-	then
-		buildtype=Release
-	elif [[ "_$arg" == "_clang" ]]
-	then
-		perfo=1
-	elif [[ "_$arg" == "_gcov" ]]
-	then
-		buildtype=gcov
-	elif [[ "_$arg" == "_ftrace" ]]
-	then
-		buildtype=ftrace
-	elif [[ "_$arg" == "_callgrind" ]]
-	then
-		cmake_opts="$cmake_opts -DPROFILE_TYPE=callgrind"
-		command_opts="/usr/bin/valgrind --tool=callgrind --dump-instr=yes --simulate-cache=yes --callgrind-out-file=../../Testing/callgrind.out.%p"
-	elif [[ "_$arg" == "_valgrind" ]]
-	then
-		cmake_opts="$cmake_opts -DPROFILE_TYPE=valgrind"
-		valgrind=0
-	elif [[ "_$arg" == "_verbose" ]]
-	then
-		export VERBOSE=1
-	fi
-done
-
-if [[ "_$buildtype" == "_" ]]
+if [ $gcov -eq 1 ] || [ $callgrind -eq 1 ] || [ $valgrind -eq 1 ] || [ $ftrace -eq 1 ]
 then
-	buildtype=Debug
+	#No build type added in this case
+	release=0
+	#TODO: add a check to forbing usage of those options at the same time
+elif [ $release -eq 1 ]
+then
+	cmake_opts="$cmake_opts -DCMAKE_BUILD_TYPE=Release"
+else
+	cmake_opts="$cmake_opts -DCMAKE_BUILD_TYPE=Debug"
+fi 
+
+if [ $clang -eq 1 ]
+then
+	#TODO: add configuration for clang path
+	cmake_opts="$cmake_opts -DCMAKE_C_COMPILER=/usr/bin/clang -DCMAKE_CXX_COMPILER=/usr/bin/clang++"	
 fi
 
-cmake_opts="$cmake_opts -DCMAKE_BUILD_TYPE=$buildtype"
-
-#Build makefiles
-cmake . $cmake_opts
-
-target=0
-#Explore each argument again to run targets
-for arg in "$@"
-do
-	if [[ "_$arg" == "_clean" ]]
-	then
-		target=1
-		clean
-	elif [[ "_$arg" == "_depclean" ]]
-	then
-		target=1
-		depclean
-	elif [[ "_$arg" == "_test" ]]
-	then
-		target=1
-		unit_tests
-	elif [[ "_$arg" == "_perfo" ]]
-	then
-		target=1
-		performance_tests	
-	elif [[ "_$arg" == "_cdash" ]]
-	then
-		target=1
-		cdash
-	elif [[ "_$arg" == "_eclipse" ]]
-	then
-		eclipse
-	elif [[ "_$arg" == "_upgrade" ]]
-	then
-		upgrade
-	fi
-
-	if [[ "_$arg" == "_help" ]]
-	then
-		usage
-	fi
-
-done
-
-#Nothing was asked so by default we build the code
-if [[ "_$target" == "_0" ]]
+if [ $gcov -eq 1 ]
 then
-	make
+	#TODO: add configuration for gcov path
+	cmake_opts="$cmake_opts -DCMAKE_CXX_FLAGS:STRING=\"-g -O0 -fprofile-arcs -ftest-coverage\""	
+	cmake_opts="$cmake_opts -DCMAKE_C_FLAGS:STRING=\"-g -O0 -fprofile-arcs -ftest-coverage\""	
+	cmake_opts="$cmake_opts -DCOVERAGE_COMMAND:STRING=/usr/bin/gcov"	
 fi
 
+if [ $valgrind -eq 1 ]
+then
+	#TODO: add configuration for valgrind path
+	command="/usr/bin/valgrind --trace-children=yes --quiet --tool=memcheck --leak-check=yes --show-reachable=yes --num-callers=100 --verbose --demangle=yes"
+	cmake_opts="$cmake_opts -DCMAKE_CXX_FLAGS:STRING=\"-g -O0\""	
+	cmake_opts="$cmake_opts -DCMAKE_C_FLAGS:STRING=\"-g -O0\""	
+fi
+
+if [ $callgrind -eq 1 ]
+then
+	#TODO: add configuration for valgrind path
+	command="/usr/bin/valgrind --tool=callgrind --dump-instr=yes --simulate-cache=yes --callgrind-out-file=../../Testing/callgrind.out.%p"
+	cmake_opts="$cmake_opts -DCMAKE_CXX_FLAGS:STRING=\"-g -O0\""	
+	cmake_opts="$cmake_opts -DCMAKE_C_FLAGS:STRING=\"-g -O0\""	
+fi
+
+if [ $ftrace -eq 1 ]
+then
+	#TODO: add ftrace tool
+	echo
+fi
+
+if [ $verbose -eq 1 ]
+then
+	cmake_opts="$cmake_opts -DCMAKE_VERBOSE_MAKEFILE=ON"
+	make_opts="$make_opts VERBOSE=1"
+fi
+
+if [ $target -eq 0 ]
+then
+	build=1
+fi
+ 
+if [ $depclean -eq 1 ]
+then
+	depclean
+fi
+
+if [ $clean -eq 1 ]
+then
+	clean
+fi
+
+if [ $build -eq 1 ]
+then
+	eval "cmake $cmake_opts ."
+	make $make_opts	
+fi
+
+if [ $run_tu -eq 1 ]
+then
+	unit_tests
+fi
+
+#run_perfo=0 
+#run_it=0 
+#cdash=0 
+#eclipse=0
+#upgrade_tools=0
