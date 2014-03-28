@@ -1,7 +1,5 @@
 #!/bin/bash
 
-set -x
-
 #Build script version 1.0.0
 #History:
 #Version 1.0.0: first working and released version of the script
@@ -26,22 +24,30 @@ function usage()
 	echo "    eclipse:       generate eclipse project" 
 	echo "    upgrade-tools: upgrade tools with latest version from github"
 	echo "Build options:"
-	echo "    -release:      build with release informations (by default debug build is made with debug informations)" 
-	echo "    -clang:        build with clang instead of gcc" 
-	echo "    -gcov:         add covering informations, imply debug" 
-	echo "    -valgrind:     run tests through valgrind" 
-	echo "    -callgrind:    run tests through callgrind" 
-	echo "    -ftrace:       add ftrace instrumentation on build and tests" 
-	echo "    -verbose:      enable verbose mode" 
+	echo "    -release:           build with release informations (by default debug build is made with debug informations)" 
+	echo "    -clang:             build with clang instead of gcc" 
+	echo "    -MemorySanitizer:   use MemorySanitizer tool (available for gcc and clang)" 
+	echo "    -AddressSanitizer:  use AddressSanitizer tools (available for gcc and clang)" 
+	echo "    -ThreadSanitizer:   use ThreadSanitizer tools (available for gcc and clang)" 
+	echo "    -DataFlowSanitizer: use DataFlowSanitizer tools (available for gcc and clang)" 
+	echo "    -gcov:              add covering informations, imply debug" 
+	echo "    -valgrind:          run tests through valgrind" 
+	echo "    -callgrind:         run tests through callgrind" 
+	echo "    -ftrace:            add ftrace instrumentation on build and tests" 
+	echo "    -verbose:           enable verbose mode" 
 	echo
 	echo "help: output command help and quit" 
 	exit 0
 }
-possible_args="clean depclean build run-tests run-tu run-perfo run-it cdash eclipse upgrade-tools -release -clang -gcov -valgrind -callgrind -ftrace -verbose help"
+possible_args="clean depclean build run-tests run-tu run-perfo run-it cdash eclipse upgrade-tools -release -clang -ThreadSanitizer -AddressSanitizer -ThreadSanitizer -DataFlowSanitizer -gcov -valgrind -callgrind -ftrace -verbose help"
 
 #Options
 release=0 
 clang=0
+MemorySanitizer=0 
+AddressSanitizer=0
+ThreadSanitizer=0
+DataFlowSanitizer=0
 gcov=0
 callgrind=0
 valgrind=0
@@ -64,6 +70,7 @@ target=0
 cmake_opts="-DCTEST_USE_LAUNCHERS=ON"
 make_opts=""
 command=""
+post_command=""
 
 #test command line arguments
 for arg in "$@"
@@ -130,6 +137,22 @@ do
 	elif [[ "_$arg" == "_-clang" ]]
 	then
 		clang=1
+	elif [[ "_$arg" == "_-MemorySanitizer" ]]
+	then
+		clang=1
+		MemorySanitizer=1
+	elif [[ "_$arg" == "_-AddressSanitizer" ]]
+	then
+		clang=1
+		AddressSanitizer=1
+	elif [[ "_$arg" == "_-ThreadSanitizer" ]]
+	then
+		clang=1
+		ThreadSanitizer=1
+	elif [[ "_$arg" == "_-DataFlowSanitizer" ]]
+	then
+		clang=1
+		DataFlowSanitizer=1
 	elif [[ "_$arg" == "_-gcov" ]]
 	then
 		gcov=1
@@ -177,13 +200,19 @@ function depclean()
 #Performance tests 
 function performance_tests()
 {
-	echo	
+	find . -type f -name "*-perfo-test" -exec $command {} \; 
 }
 
 #Unit tests
 function unit_tests()
 {
 	find . -type f -name "*-unit-test" -exec $command {} \; 
+}
+
+#Unit tests
+function integration_tests()
+{
+	find . -type f -name "*-integration-test" -exec $command {} \; 
 }
 
 function cdash()
@@ -244,9 +273,10 @@ fi
 if [ $callgrind -eq 1 ]
 then
 	#TODO: add configuration for valgrind path
-	command="/usr/bin/valgrind --tool=callgrind --dump-instr=yes --simulate-cache=yes --callgrind-out-file=../../Testing/callgrind.out.%p"
+	command="/usr/bin/valgrind --tool=callgrind --dump-instr=yes --simulate-cache=yes --callgrind-out-file=Testing/callgrind.out.%p"
 	cmake_opts="$cmake_opts -DCMAKE_CXX_FLAGS:STRING=\"-g -O0\""	
 	cmake_opts="$cmake_opts -DCMAKE_C_FLAGS:STRING=\"-g -O0\""	
+	post_command="kcachegrind $(ls -t -1 Testing/callgrind.out.* | head -n1)"
 fi
 
 if [ $ftrace -eq 1 ]
@@ -287,8 +317,29 @@ then
 	unit_tests
 fi
 
-#run_perfo=0 
-#run_it=0 
-#cdash=0 
-#eclipse=0
-#upgrade_tools=0
+if [ $run_perfo -eq 1 ]
+then
+	performance_tests
+fi
+
+if [ $run_it -eq 1 ]
+then
+	integration_tests
+fi
+
+if [ $cdash -eq 1 ]
+then
+	cdash
+fi
+
+if [ $eclipse -eq 1 ]
+then
+	eclipse
+fi
+
+if [ $upgrade_tools -eq 1 ]
+then
+	upgrade_tools
+fi
+
+$post_command
