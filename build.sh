@@ -40,7 +40,7 @@ function usage()
 	echo "help: output command help and quit" 
 	exit 0
 }
-possible_args="clean depclean build run-tests run-tu run-perfo run-it cdash eclipse upgrade-tools -release -clang -ThreadSanitizer -AddressSanitizer -ThreadSanitizer -DataFlowSanitizer -gcov -valgrind -callgrind -ftrace -verbose help"
+possible_args="clean depclean build run-tests run-tu run-perfo run-it cdash eclipse upgrade-tools -release -clang -ThreadSanitizer -AddressSanitizer -ThreadSanitizer -DataFlowSanitizer -gcov -valgrind -callgrind -ftrace -verbose -ddd help"
 
 #Options
 release=0 
