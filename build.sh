@@ -34,6 +34,7 @@ function usage()
 	echo "    -valgrind:          run tests through valgrind" 
 	echo "    -callgrind:         run tests through callgrind" 
 	echo "    -ftrace:            add ftrace instrumentation on build and tests" 
+	echo "    -ddd:               run tests through ddd debugger 
 	echo "    -verbose:           enable verbose mode" 
 	echo
 	echo "help: output command help and quit" 
@@ -53,6 +54,7 @@ callgrind=0
 valgrind=0
 ftrace=0
 verbose=0 
+ddd=0
 
 #Targets
 clean=0
@@ -168,7 +170,10 @@ do
 	elif [[ "_$arg" == "_-verbose" ]]
 	then
 		verbose=1
-	elif [[ "_$arg" == "_help" ]]
+	elif [[ "_$arg" == "_-ddd" ]]
+	then
+		ddd=1
+		elif [[ "_$arg" == "_help" ]]
 	then
 		usage
 		exit 0
@@ -283,6 +288,13 @@ if [ $ftrace -eq 1 ]
 then
 	#TODO: add ftrace tool
 	echo
+fi
+
+if [ $ddd -eq 1 ]
+then
+	#TODO: add configuration for valgrind path
+	command="ddd"
+	cmake_opts="$cmake_opts -DCMAKE_BUILD_TYPE=Debug"	
 fi
 
 if [ $verbose -eq 1 ]
