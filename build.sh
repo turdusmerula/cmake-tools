@@ -34,7 +34,7 @@ function usage()
 	echo "    -valgrind:          run tests through valgrind" 
 	echo "    -callgrind:         run tests through callgrind" 
 	echo "    -ftrace:            add ftrace instrumentation on build and tests" 
-	echo "    -ddd:               run tests through ddd debugger 
+	echo "    -ddd:               run tests through ddd debugger"
 	echo "    -verbose:           enable verbose mode" 
 	echo
 	echo "help: output command help and quit" 
