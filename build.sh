@@ -351,7 +351,7 @@ fi
 
 if [ $upgrade_tools -eq 1 ]
 then
-	upgrade_tools
+	upgrade
 fi
 
 $post_command
