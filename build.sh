@@ -237,6 +237,10 @@ function upgrade()
 	chmod +x build.sh
 }
 
+if [ -f init.sh ]
+then
+	source init.sh 
+fi
 
 #Output anything outputted by the test program if the test should fail.
 CTEST_OUTPUT_ON_FAILURE=true
