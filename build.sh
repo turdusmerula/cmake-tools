@@ -180,6 +180,11 @@ do
 	fi
 done
 
+if [ -f init.sh ]
+then
+	source init.sh
+fi
+
 function clean()
 {
 	make clean	
