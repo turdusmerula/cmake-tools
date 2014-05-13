@@ -180,6 +180,31 @@ do
 	fi
 done
 
+function custom_clean()
+{
+	echo -n
+}
+
+function custom_depclean()
+{
+	echo -n
+}
+	
+function custom_performance_tests()
+{
+	echo -n
+}
+
+function custom_unit_tests()
+{
+	echo -n
+}
+
+function custom_integration_tests()
+{
+	echo -n
+}
+
 if [ -f init.sh ]
 then
 	source init.sh
@@ -188,6 +213,7 @@ fi
 function clean()
 {
 	make clean	
+	custom_clean
 }
 
 function depclean()
@@ -205,24 +231,59 @@ function depclean()
 	find . -type f -name "DartConfiguration.tcl" -exec rm -f {} \;
 	rm -rf lib*.deb Testing
 	rm -rf tmp
+	
+	custom_depclean
 }
 
 #Performance tests 
 function performance_tests()
 {
-	find . -type f -name "*-perfo-test" -exec $command {} \; 
+	find . -type f -name "*-perfo-test" > /tmp/.tests 
+
+	exec 3</tmp/.tests 
+	while read -u3 command    
+	do    
+	    echo "Run performance test $command"    
+		cd $(dirname $command)
+		./$(basename $command)
+		cd -
+	done
+	
+	custom_performance_tests
 }
 
 #Unit tests
 function unit_tests()
 {
-	find . -type f -name "*-unit-test" -exec $command {} \; 
+	find . -type f -name "*-unit-test" > /tmp/.tests 
+	
+	exec 3</tmp/.tests 
+	while read -u3 command    
+	do
+	    echo "Run unit test $command"    
+		cd $(dirname $command)
+		./$(basename $command)
+		cd -
+	done
+	
+	custom_unit_tests
 }
 
 #Unit tests
 function integration_tests()
 {
-	find . -type f -name "*-integration-test" -exec $command {} \; 
+	find . -type f -name "*-integration-test" > /tmp/.tests 
+	
+	exec 3</tmp/.tests 
+	while read -u3 command    
+	do    
+	    echo "Run integration test $command"    
+		cd $(dirname $command)
+		./$(basename $command)
+		cd -
+	done
+	
+	custom_integration_tests
 }
 
 function cdash()
