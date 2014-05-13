@@ -225,7 +225,9 @@ function depclean()
 	find . -type f -name install_manifest.txt -exec rm -f {} \;
 	find . -type f -name Makefile -exec rm -f {} \;
 	find . -type f -name CMakeCache.txt -exec rm -f {} \;
-	find . -type f \( -name "*.cmake" ! -name "CTestConfig.cmake" \) -exec rm -f {} \;
+	find . -type f -name "cmake_install.cmake" -exec rm -f {} \;
+	find . -type f -name "CTestConfig.cmake" -exec rm -f {} \;
+	find . -type f -name "CTestTestfile.cmake" -exec rm -f {} \;
 	find . -type f -name "*.db" -exec rm -f {} \;
 	find . -type f -name "*.defs" -exec rm -f {} \;
 	find . -type f -name "DartConfiguration.tcl" -exec rm -f {} \;
