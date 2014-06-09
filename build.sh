@@ -393,7 +393,16 @@ fi
 if [ $build -eq 1 ]
 then
 	eval "cmake $cmake_opts ."
+	if [[ $? -ne 0 ]]
+	then
+	   exit 1
+    fi
+	
 	make $make_opts	
+    if [[ $? -ne 0 ]]
+    then
+       exit 1
+    fi
 fi
 
 if [ $run_tu -eq 1 ]
