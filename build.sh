@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/bash 
 
 #Build script version 1.0.0
 #History:
@@ -13,34 +13,36 @@ function usage()
 	echo "Available targets:"
 	echo "    clean:         clean sources" 
 	echo "    depclean:      clean sources and makefiles" 
-	echo "    build:         run all tests" 
+	echo "    build:         compile and link sources" 
+	echo "    package:       create source and install packages" 
+	echo "    install:       install packages on the system"
+	echo "    deploy:        create a release version, tag it on git and create source tarball on github"
 	echo "    run-tests:     run all tests" 
 	echo "    run-tu:        run unit tests" 
 	echo "    run-perfo:     run performance tests" 
 	echo "    run-it:        run integration tests" 
-	echo "    package:       create source and install packages" 
-	echo "    install:       install packages on the system" 
 	echo "    cdash:         perform unit tests with gcov and send results to cdash" 
 	echo "    eclipse:       generate eclipse project" 
 	echo "    upgrade-tools: upgrade tools with latest version from github"
 	echo "Build options:"
-	echo "    -release:           build with release informations (by default debug build is made with debug informations)" 
-	echo "    -clang:             build with clang instead of gcc" 
-	echo "    -MemorySanitizer:   use MemorySanitizer tool (available for gcc and clang)" 
-	echo "    -AddressSanitizer:  use AddressSanitizer tools (available for gcc and clang)" 
-	echo "    -ThreadSanitizer:   use ThreadSanitizer tools (available for gcc and clang)" 
-	echo "    -DataFlowSanitizer: use DataFlowSanitizer tools (available for gcc and clang)" 
-	echo "    -gcov:              add covering informations, imply debug" 
-	echo "    -valgrind:          run tests through valgrind" 
-	echo "    -callgrind:         run tests through callgrind" 
-	echo "    -ftrace:            add ftrace instrumentation on build and tests" 
-	echo "    -ddd:               run tests through ddd debugger"
-	echo "    -verbose:           enable verbose mode" 
+	echo "    --tests=testname[,testname,...]:  list of tests to be run" 
+	echo "    --release:           build with release informations (by default build is made with debug informations)" 
+	echo "    --clang:             build with clang instead of gcc" 
+	echo "    --MemorySanitizer:   use MemorySanitizer tool (available for gcc and clang)" 
+	echo "    --AddressSanitizer:  use AddressSanitizer tools (available for gcc and clang)" 
+	echo "    --ThreadSanitizer:   use ThreadSanitizer tools (available for gcc and clang)" 
+	echo "    --DataFlowSanitizer: use DataFlowSanitizer tools (available for gcc and clang)" 
+	echo "    --gcov:              add covering informations, imply debug" 
+	echo "    --valgrind:          run tests through valgrind" 
+	echo "    --callgrind:         run tests through callgrind" 
+	echo "    --ftrace:            add ftrace instrumentation on build and tests" 
+	echo "    --ddd:               run tests through ddd debugger"
+	echo "    --verbose:           enable verbose mode" 
 	echo
 	echo "help: output command help and quit" 
 	exit 0
 }
-possible_args="clean depclean build run-tests run-tu run-perfo run-it cdash eclipse upgrade-tools -release -clang -ThreadSanitizer -AddressSanitizer -ThreadSanitizer -DataFlowSanitizer -gcov -valgrind -callgrind -ftrace -verbose -ddd help"
+possible_args=" clean depclean build package install deploy run-tests run-tu run-perfo run-it cdash eclipse upgrade-tools --tests --release --clang --ThreadSanitizer --AddressSanitizer --ThreadSanitizer --DataFlowSanitizer --MemorySanitizer --gcov --valgrind --callgrind --ftrace --verbose --ddd help"
 
 #Options
 release=0 
@@ -58,8 +60,11 @@ ddd=0
 
 #Targets
 clean=0
-depclean=0 
+depclean=0
 build=0
+package=0
+install=0 
+deploy=0
 run_tu=0 
 run_perfo=0 
 run_it=0 
@@ -77,7 +82,8 @@ post_command=""
 #test command line arguments
 for arg in "$@"
 do
-	if [[ ! $possible_args =~ $arg ]]
+	filt_arg="$(echo $arg | sed "s#\(.*\)=.*#\1#g")"
+	if [[ ! $possible_args =~ " $filt_arg " ]]
 	then
 		usage
 		exit 1 
@@ -87,6 +93,9 @@ done
 #Explore each argument to set options
 for arg in "$@"
 do
+	filt_arg="$(echo $arg | sed "s#\(.*\)=.*#\1#g")"
+	value_arg="$(echo $arg | sed "s#.*=\(.*\)#\1#g")"
+	
 	if [[ "_$arg" == "_clean" ]]
 	then
 		clean=1
@@ -99,6 +108,22 @@ do
 	then
 		build=1
 		target=1
+	elif [[ "_$arg" == "_package" ]]
+	then
+		build=1
+		target=1
+		package=1
+	elif [[ "_$arg" == "_install" ]]
+	then
+		build=1
+		target=1
+		package=1
+		install=1
+	elif [[ "_$arg" == "_deploy" ]]
+	then
+		build=1
+		target=1
+		deploy=1
 	elif [[ "_$arg" == "_run-tests" ]]
 	then
 		run_tu=1
@@ -133,44 +158,50 @@ do
 	then
 		upgrade_tools=1
 		target=1
-	elif [[ "_$arg" == "_-release" ]]
+	elif [[ "_$filt_arg" == "_--tests" ]]
+	then
+		if [[ "_$value_arg" != "_" ]]
+		then
+			tests="$value_arg"
+		fi
+	elif [[ "_$arg" == "_--release" ]]
 	then
 		release=1
-	elif [[ "_$arg" == "_-clang" ]]
+	elif [[ "_$arg" == "_--clang" ]]
 	then
 		clang=1
-	elif [[ "_$arg" == "_-MemorySanitizer" ]]
+	elif [[ "_$arg" == "_--MemorySanitizer" ]]
 	then
 		clang=1
 		MemorySanitizer=1
-	elif [[ "_$arg" == "_-AddressSanitizer" ]]
+	elif [[ "_$arg" == "_--AddressSanitizer" ]]
 	then
 		clang=1
 		AddressSanitizer=1
-	elif [[ "_$arg" == "_-ThreadSanitizer" ]]
+	elif [[ "_$arg" == "_--ThreadSanitizer" ]]
 	then
 		clang=1
 		ThreadSanitizer=1
-	elif [[ "_$arg" == "_-DataFlowSanitizer" ]]
+	elif [[ "_$arg" == "_--DataFlowSanitizer" ]]
 	then
 		clang=1
 		DataFlowSanitizer=1
-	elif [[ "_$arg" == "_-gcov" ]]
+	elif [[ "_$arg" == "_--gcov" ]]
 	then
 		gcov=1
-	elif [[ "_$arg" == "_-valgrind" ]]
+	elif [[ "_$arg" == "_--valgrind" ]]
 	then
 		valgrind=1
-	elif [[ "_$arg" == "_-callgrind" ]]
+	elif [[ "_$arg" == "_--callgrind" ]]
 	then
 		callgrind=1
-	elif [[ "_$arg" == "_-ftrace" ]]
+	elif [[ "_$arg" == "_--ftrace" ]]
 	then
 		ftrace=1
-	elif [[ "_$arg" == "_-verbose" ]]
+	elif [[ "_$arg" == "_--verbose" ]]
 	then
 		verbose=1
-	elif [[ "_$arg" == "_-ddd" ]]
+	elif [[ "_$arg" == "_--ddd" ]]
 	then
 		ddd=1
 		elif [[ "_$arg" == "_help" ]]
@@ -179,6 +210,31 @@ do
 		exit 0
 	fi
 done
+
+function run_test()
+{
+	testname=$(basename $1)
+	command=$1
+	type=$2
+	
+	run=0
+	if [[ "_$tests" == "_" ]]
+	then
+		run=1
+	elif [[ $tests =~ $testname ]]
+	then
+		run=1
+	fi
+	
+	if [ $run -eq 1 ]
+	then	
+        echo "Run $type test $testname"    
+
+		cd $(dirname $command)
+		./$(basename $command)
+		cd -
+	fi
+}
 
 function custom_clean()
 {
@@ -201,6 +257,21 @@ function custom_unit_tests()
 }
 
 function custom_integration_tests()
+{
+	echo -n
+}
+
+function custom_package()
+{
+	echo -n
+}
+
+function custom_install()
+{
+	echo -n
+}
+
+function custom_deploy()
 {
 	echo -n
 }
@@ -237,6 +308,24 @@ function depclean()
 	custom_depclean
 }
 
+function package()
+{
+	echo -n
+	custom_package
+}
+
+function install()
+{
+	echo -n
+	custom_install
+}
+
+function deploy()
+{
+	echo -n
+	custom_deploy
+}
+
 #Performance tests 
 function performance_tests()
 {
@@ -244,11 +333,8 @@ function performance_tests()
 
 	exec 3</tmp/.tests 
 	while read -u3 command    
-	do    
-	    echo "Run performance test $command"    
-		cd $(dirname $command)
-		./$(basename $command)
-		cd -
+	do
+		run_test $command "performance"
 	done
 	
 	custom_performance_tests
@@ -262,10 +348,7 @@ function unit_tests()
 	exec 3</tmp/.tests 
 	while read -u3 command    
 	do
-	    echo "Run unit test $command"    
-		cd $(dirname $command)
-		./$(basename $command)
-		cd -
+		run_test $command "unit"
 	done
 	
 	custom_unit_tests
@@ -279,10 +362,7 @@ function integration_tests()
 	exec 3</tmp/.tests 
 	while read -u3 command    
 	do    
-	    echo "Run integration test $command"    
-		cd $(dirname $command)
-		./$(basename $command)
-		cd -
+		run_test $command "integration"
 	done
 	
 	custom_integration_tests
@@ -303,6 +383,10 @@ function upgrade()
 	mv $0 $0.bak
 	wget https://raw.githubusercontent.com/turdusmerula/cmake-tools/master/build.sh
 	chmod +x build.sh
+	if [[ ! -f init.sh ]]
+	then
+		wget https://raw.githubusercontent.com/turdusmerula/cmake-tools/master/init.sh
+	fi
 }
 
 if [ -f init.sh ]
@@ -354,6 +438,12 @@ then
 	cmake_opts="$cmake_opts -DCMAKE_CXX_FLAGS:STRING=\"-g -O0\""	
 	cmake_opts="$cmake_opts -DCMAKE_C_FLAGS:STRING=\"-g -O0\""	
 	post_command="kcachegrind $(ls -t -1 Testing/callgrind.out.* | head -n1)"
+fi
+
+if [ $MemorySanitizer -eq 1 ]
+then
+	cmake_opts="$cmake_opts -DCMAKE_CXX_FLAGS:STRING=\"-fsanitize=memory -fno-optimize-sibling-calls -fno-omit-frame-pointer -fsanitize-memory-track-origins=2\""	
+	
 fi
 
 if [ $ftrace -eq 1 ]
@@ -420,6 +510,21 @@ then
 	integration_tests
 fi
 
+if [ $package -eq 1 ]
+then
+	package
+fi
+
+if [ $install -eq 1 ]
+then
+	install
+fi
+
+if [ $deploy -eq 1 ]
+then
+	deploy
+fi
+
 if [ $cdash -eq 1 ]
 then
 	cdash
@@ -435,4 +540,5 @@ then
 	upgrade
 fi
 
+#last command to be run
 $post_command

@@ -20,3 +20,6 @@
 /CTestTestfile.cmake
 /DartConfiguration.tcl
 /Makefile
+
+.cproject
+.project

@@ -6,9 +6,6 @@ set(CMAKE_BUILD_DIRECTORY Build/)
 set(LIBRARY_OUTPUT_PATH Build/lib)
 set(EXECUTABLE_OUTPUT_PATH Build/bin)
 
-#Set default compiler flags
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11")
-
 SET_PROPERTY(GLOBAL PROPERTY RULE_LAUNCH_COMPILE "${CTEST_LAUNCH_COMPILE}")
 
 if(CMAKE_BUILD_TYPE STREQUAL "Debug")
@@ -18,6 +15,9 @@ elseif(CMAKE_BUILD_TYPE STREQUAL "Release")
 	#Compile withe optimisations on, -O3 mode si not recommended
 	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O2")
 endif()
+
+#Set default compiler flags
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11")
 
 
 message("Build type ${CMAKE_BUILD_TYPE}")

@@ -18,6 +18,3 @@ FILE(GLOB sources src/*.cpp)
 add_executable(${PROJECT_NAME} ${sources})
 target_link_libraries(${PROJECT_NAME} cppunit )
 
-#Add test to be run by ctest
-enable_testing()
-add_test(tests ${PROJECT_NAME})
