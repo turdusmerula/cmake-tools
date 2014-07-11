@@ -276,9 +276,9 @@ function custom_deploy()
 	echo -n
 }
 
-if [ -f init.sh ]
+if [ -f build-config ]
 then
-	source init.sh
+	source build-config
 fi
 
 function clean()
@@ -381,11 +381,11 @@ function eclipse()
 function upgrade()
 {
 	mv $0 $0.bak
-	wget https://raw.githubusercontent.com/turdusmerula/cmake-tools/master/build.sh
-	chmod +x build.sh
+	wget https://raw.githubusercontent.com/turdusmerula/cmake-tools/master/build
+	chmod +x build
 	if [[ ! -f init.sh ]]
 	then
-		wget https://raw.githubusercontent.com/turdusmerula/cmake-tools/master/init.sh
+	wget https://raw.githubusercontent.com/turdusmerula/cmake-tools/master/build-config
 	fi
 }
 
