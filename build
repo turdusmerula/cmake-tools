@@ -289,21 +289,18 @@ function clean()
 
 function depclean()
 {
-	find . -type d -name Build -exec rm -rf {} \;
-	find . -type d -name CMakeFiles -exec rm -rf {} \;
-	find . -type d -name _CPack_Packages -exec rm -rf {} \;
-	find . -type d -name Testing -exec rm -rf {} \;
-	find . -type f -name install_manifest.txt -exec rm -f {} \;
-	find . -type f -name Makefile -exec rm -f {} \;
-	find . -type f -name CMakeCache.txt -exec rm -f {} \;
-	find . -type f -name "cmake_install.cmake" -exec rm -f {} \;
-	find . -type f -name "CTestConfig.cmake" -exec rm -f {} \;
-	find . -type f -name "CTestTestfile.cmake" -exec rm -f {} \;
-	find . -type f -name "*.db" -exec rm -f {} \;
-	find . -type f -name "*.defs" -exec rm -f {} \;
-	find . -type f -name "DartConfiguration.tcl" -exec rm -f {} \;
-	rm -rf lib*.deb Testing
-	rm -rf tmp
+	eval "find . -type d -name Build ${DEPCLEAN_CUSTOM_PATTERN} -exec rm -rf {} \;"
+	eval "find . -type d -name CMakeFiles ${DEPCLEAN_CUSTOM_PATTERN} -exec rm -rf {} \;"
+	eval "find . -type d -name _CPack_Packages ${DEPCLEAN_CUSTOM_PATTERN} -exec rm -rf {} \;"
+	eval "find . -type d -name Testing ${DEPCLEAN_CUSTOM_PATTERN} -exec rm -rf {} \;"
+	eval "find . -type f -name install_manifest.txt ${DEPCLEAN_CUSTOM_PATTERN} -exec rm -f {} \;"
+	eval "find . -type f -name Makefile ${DEPCLEAN_CUSTOM_PATTERN} -exec rm -f {} \;"
+	eval "find . -type f -name CMakeCache.txt ${DEPCLEAN_CUSTOM_PATTERN} -exec rm -f {} \;"
+	eval "find . -type f -name "cmake_install.cmake" ${DEPCLEAN_CUSTOM_PATTERN} -exec rm -f {} \;"
+	eval "find . -type f -name "CTestConfig.cmake" ${DEPCLEAN_CUSTOM_PATTERN} -exec rm -f {} \;"
+	eval "find . -type f -name "CTestTestfile.cmake" ${DEPCLEAN_CUSTOM_PATTERN} -exec rm -f {} \;"
+	eval "find . -type f -name "DartConfiguration.tcl" ${DEPCLEAN_CUSTOM_PATTERN} -exec rm -f {} \;"
+    rm -rf Testing
 	
 	custom_depclean
 }
