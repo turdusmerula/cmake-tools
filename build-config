@@ -1,41 +1,49 @@
 export LD_LIBRARY_PATH=libhello/Build/lib
 
+#Perform here custom clean steps
 function custom_clean()
 {
 	echo -n
 }
 
+#Perform here custom clean steps for repository
 function custom_depclean()
 {
 	echo -n
 }
-	
+
+#Run custom performance tests
 function custom_performance_tests()
 {
 	echo -n
 }
 
+#Run custom unit tests
 function custom_unit_tests()
 {
 	echo -n
 }
 
+#Run custom integration tests
 function custom_integration_tests()
 {
 	echo -n
 }
 
+#Create source/developer/release packages
 function custom_package()
 {
 	echo -n
 }
 
+#Install packages
 function custom_install()
 {
 	echo -n
 }
 
-function custome_deploy()
+#Tag version and create a new release
+function custom_deploy()
 {
 	echo -n
 }

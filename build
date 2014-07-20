@@ -276,11 +276,6 @@ function custom_deploy()
 	echo -n
 }
 
-if [ -f build-config ]
-then
-	source build-config
-fi
-
 function clean()
 {
 	make clean	
@@ -380,15 +375,15 @@ function upgrade()
 	mv $0 $0.bak
 	wget https://raw.githubusercontent.com/turdusmerula/cmake-tools/master/build
 	chmod +x build
-	if [[ ! -f init.sh ]]
+	if [[ ! -f build-config ]]
 	then
-	wget https://raw.githubusercontent.com/turdusmerula/cmake-tools/master/build-config
+	   wget https://raw.githubusercontent.com/turdusmerula/cmake-tools/master/build-config
 	fi
 }
 
-if [ -f init.sh ]
+if [ -f build-config ]
 then
-	source init.sh 
+	source build-config
 fi
 
 #Output anything outputted by the test program if the test should fail.
