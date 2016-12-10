@@ -1,536 +1,264 @@
 #!/bin/bash 
 
-#Build script version 1.0.0
-#History:
-#Version 1.0.0: first working and released version of the script
+xpl_path=$(cd -P -- "$(dirname -- "$0")" && pwd -P)
 
+opt_gold=1
+opt_ccache=1
+opt_ninja=1
 
-#TODO add a configuration file for env path
+function compiler_versions() {
+	compiler=$1
+	
+	version=$(
+		IFS=':'
+		for i in $PATH
+		do 
+			test -d "$i" && find "$i" -maxdepth 1 -executable -name "${compiler}-*" -exec basename {} \; | grep -e "^${compiler}-[0-9]"
+		done | sort | uniq | sed "s#${compiler}-\(.*\)#\1#g"
+	) 
+	echo $version | sed "s# #, #g"
+}
 
 function usage()
 {
-	echo "$0 [<targets> ...]"
-	echo "Available targets:"
-	echo "    clean:         clean sources" 
-	echo "    depclean:      clean sources and makefiles" 
-	echo "    build:         compile and link sources" 
-	echo "    package:       create source and install packages" 
-	echo "    install:       install packages on the system"
-	echo "    deploy:        create a release version, tag it on git and create source tarball on github"
-	echo "    run-tests:     run all tests" 
-	echo "    run-tu:        run unit tests" 
-	echo "    run-perfo:     run performance tests" 
-	echo "    run-it:        run integration tests" 
-	echo "    cdash:         perform unit tests with gcov and send results to cdash" 
-	echo "    eclipse:       generate eclipse project" 
-	echo "    upgrade-tools: upgrade tools with latest version from github"
+	gcc_versions="$(compiler_versions gcc)"
+	clang_versions="$(compiler_versions clang)"
+	
+	cmake --help 
+	echo >&2
+	
+    echo "Additional targets:"
+    echo "  distclean                    = Clean cmake generated files " 
+    echo "  eclipse                      = Generate eclipse project" 
+    echo >&2
+    
 	echo "Build options:"
-	echo "    --tests=testname[,testname,...]:  list of tests to be run" 
-	echo "    --release:           build with release informations (by default build is made with debug informations)" 
-	echo "    --clang:             build with clang instead of gcc" 
-	echo "    --MemorySanitizer:   use MemorySanitizer tool (available for gcc and clang)" 
-	echo "    --AddressSanitizer:  use AddressSanitizer tools (available for gcc and clang)" 
-	echo "    --ThreadSanitizer:   use ThreadSanitizer tools (available for gcc and clang)" 
-	echo "    --DataFlowSanitizer: use DataFlowSanitizer tools (available for gcc and clang)" 
-	echo "    --gcov:              add covering informations, imply debug" 
-	echo "    --valgrind:          run tests through valgrind" 
-	echo "    --callgrind:         run tests through callgrind" 
-	echo "    --ftrace:            add ftrace instrumentation on build and tests" 
-	echo "    --ddd:               run tests through ddd debugger"
-	echo "    --verbose:           enable verbose mode" 
-	echo
-	echo "help: output command help and quit" 
+	echo "  --debug                      = Build with debug informations (default)" >&2
+	echo "  --release                    = Build for release" >&2
+	if [ "_$gcc_versions" != "_" ]
+	then
+		echo "  --gcc=[version]              = Build with gcc (default), available versions: $gcc_versions" >&2
+	else
+		echo "  --gcc                        = Build with gcc (default)" >&2
+	fi
+	if [ "_$clang_versions" != "_" ]
+	then
+		echo "  --clang=[version]            = Build with clang, available versions: $clang_versions" >&2
+	else
+		echo "  --clang                      = Build with clang" >&2
+	fi
+	echo "  --gold                       = Use gold linker" >&2
+	echo "  --ccache                     = Use ccache to speed up build" >&2
+	echo "  --ninja                      = build with ninja" >&2
+	echo "  --verbose                    = Enable verbose build" >&2
 	exit 0
 }
-possible_args=" clean depclean build package install deploy run-tests run-tu run-perfo run-it cdash eclipse upgrade-tools --tests --release --clang --ThreadSanitizer --AddressSanitizer --ThreadSanitizer --DataFlowSanitizer --MemorySanitizer --gcov --valgrind --callgrind --ftrace --verbose --ddd help"
 
-#Options
-release=0 
-clang=0
-MemorySanitizer=0 
-AddressSanitizer=0
-ThreadSanitizer=0
-DataFlowSanitizer=0
-gcov=0
-callgrind=0
-valgrind=0
-ftrace=0
-verbose=0 
-ddd=0
+help=0
 
-#Targets
-clean=0
-depclean=0
-build=0
-package=0
-install=0 
-deploy=0
-run_tu=0 
-run_perfo=0 
-run_it=0 
-cdash=0 
-eclipse=0
-upgrade_tools=0
+cmake_opts=""
+opt_configure=0
 
-target=0
+function debug_on() {
+	cmake_opts="$cmake_opts -DCMAKE_BUILD_TYPE=Debug"
+}
 
-cmake_opts="-DCTEST_USE_LAUNCHERS=ON"
-make_opts=""
-command=""
-post_command=""
+function release_on() {
+	cmake_opts="$cmake_opts -DCMAKE_BUILD_TYPE=Release"
+}
 
-#test command line arguments
-for arg in "$@"
-do
-	filt_arg="$(echo $arg | sed "s#\(.*\)=.*#\1#g")"
-	if [[ ! $possible_args =~ " $filt_arg " ]]
+function check_compiler() {
+	compiler=$1
+	version=$2
+	
+	if [ ! -f CMakeCache.txt ]
 	then
-		usage
+		return 1
+	fi
+	
+	name=$compiler
+	if [ "_$version" != "_" ]
+	then
+		name="$name-$version"
+	fi
+	
+	if [ "_$(grep -e '$name$' CMakeCache.txt)" == "_" ]
+	then
+		echo "Previous build was made with another compiler, remove CMakeFiles before launching or distclean target" >&2
+		return 0
+	fi
+}
+
+function use_gcc() {
+	version=$1
+		
+	if [[ "_$(which gcc-${version})" == "_" ]]
+	then
+		echo "-- gcc-${version} not found !" >&2
+		exit 1
+	fi
+
+	echo "-- Enabling gcc-$1"
+	
+	check_compiler gcc $version && exit 1
+	cmake_opts="$cmake_opts -DECMAKE_COMPILER=gcc"
+	if [ "_$version" != "_" ]
+	then
+		cmake_opts="$cmake_opts -DECMAKE_COMPILER_VERSION=${version}"
+	fi
+	opt_configure=1
+}
+
+function use_clang() {
+	version=$1
+	
+	if [[ "_$(which clang-${version})" == "_" ]]
+	then
+		echo "-- gcc-${version} not found !" >&2
+		exit 1
+	fi
+
+	echo "-- Enabling clang-$1"
+	
+	check_compiler clang $version && exit 1
+	cmake_opts="$cmake_opts -DECMAKE_COMPILER=gcc"
+	if [ "_$version" != "_" ]
+	then
+		cmake_opts="$cmake_opts -DECMAKE_COMPILER_VERSION=${version}"
+	fi
+	opt_configure=1
+}
+
+function use_gold() {
+	if [[ "_$(which gold)" != "_" ]]
+	then
+		echo "-- Link with gold"
+	
+		cmake_opts="$cmake_opts -DECMAKE_LINKER_GOLD=1"
+		opt_configure=1
+	else
+		echo "-- Linker gold not found" 
+	fi
+}
+
+function use_ccache() {
+	if [[ "_$(which ccache)" != "_" ]]
+	then
+		cmake_opts="$cmake_opts -DECMAKE_USE_CCACHE=1"
+		opt_configure=1
+	else
+		echo "-- ccache not found"
+	fi
+}
+
+function use_ninja() {
+	if [[ "_$(which ninja)" != "_" ]]
+	then
+		cmake_opts="$cmake_opts -G \"Ninja\""
+	else
+		echo "-- ninja not found"
+		exit 1
+	fi
+}
+
+function tgt_distclean()
+{
+	echo "Cleaning cmake generated files"
+	
+	if [ -f Makefile ]
+	then
+		make clean
+	fi
+	
+    eval "find . -depth -type d -name CMakeFiles -print -exec rm -rf {} \;"
+    eval "find . -depth -type d -name _CPack_Packages -print -exec rm -rf {} \;"
+    eval "find . -depth -type d -name Testing -print -exec rm -rf {} \;"
+    eval "find . -depth -type f -name install_manifest.txt -print -exec rm -f {} \;"
+    eval "find . -depth -type f -name Makefile -print -exec rm -f {} \;"
+    eval "find . -depth -type f -name CMakeCache.txt -print -exec rm -f {} \;"
+    eval "find . -depth -type f -name cmake_install.cmake -print -exec rm -f {} \;"
+    eval "find . -depth -type f -name CTestConfig.cmake -print -exec rm -f {} \;"
+    eval "find . -depth -type f -name CTestTestfile.cmake -print -exec rm -f {} \;"
+    eval "find . -depth -type f -name DartConfiguration.tcl -print -exec rm -f {} \;"
+    eval "find . -depth -type f -name CPackConfig.cmake -print -exec rm -f {} \;"
+    eval "find . -depth -type f -name CPackSourceConfig.cmake -print -exec rm -f {} \;"
+}
+
+function tgt_eclipse()
+{
+    echo " Create Eclipse project"
+
+    cmake_opts="-G \"Eclipse CDT4 - Unix Makefiles\" -DCMAKE_BUILD_TYPE=Debug -DCMAKE_CXX_COMPILER_ARG1=\"-std=c++14\" $cmake_opts"
+}
+
+opt_verbose=0
+opt_target=0
+while [[ "_$*" != "_" ]]
+do
+    if [ "_$(echo "$1" | grep '=')" != "_" ]
+    then
+        filt_arg="$(echo $1 | sed "s#\(.*\)=.*#\1#g")"
+        value_arg="$(echo $1 | sed "s#.*=\(.*\)#\1#g")"
+    else
+        filt_arg=$1
+        unset value_arg
+    fi
+
+	if [[ "$filt_arg" == "--help" ]]; then
+	    help=1
+	elif [[ "$filt_arg" == "--debug" ]]; then
+	    debug_on
+	elif [[ "$filt_arg" == "--release" ]]; then
+	    release_on
+	elif [[ "$filt_arg" == "--gold" ]]; then
+	    use_gold
+	elif [[ "$filt_arg" == "--gcc" ]]; then
+	    use_gcc $value_arg
+	elif [[ "$filt_arg" == "--clang" ]]; then
+	    use_clang $value_arg
+	elif [[ "$filt_arg" == "--ccache" ]]; then
+	    use_ccache
+	elif [[ "$filt_arg" == "--ninja" ]]; then
+	    use_ninja
+	elif [[ "$filt_arg" == "--verbose" ]]; then
+	    opt_verbose=1
+	elif [[ "$filt_arg" == "distclean" ]]; then
+	    tgt_distclean
+	    opt_target=1
+	elif [[ "$filt_arg" == "eclipse" ]]; then
+	    tgt_eclipse
+	else
+	    args="$args $1"
+	fi
+	
+	shift
+done
+
+if [ $help -eq 1 ] 
+then
+	usage
+fi
+
+if [ $opt_verbose -eq 1 ]
+then
+    cmake_opts="$cmake_opts -DCMAKE_VERBOSE_MAKEFILE=ON"
+else
+    cmake_opts="$cmake_opts -DCMAKE_VERBOSE_MAKEFILE=OFF"
+fi
+
+if [ $opt_configure -eq 1 ]
+then
+	[ -f /usr/lib/ecmake/configure.cmake ] && config=/usr/lib/ecmake/configure.cmake
+	[ -f /usr/local/lib/ecmake/configure.cmake ] && config=/usr/local/lib/ecmake/configure.cmake
+	if [ "_${config}" == "_" ]
+	then
+		echo "configure.cmake not found" >&2
 		exit 1 
 	fi
-done
-
-#Explore each argument to set options
-for arg in "$@"
-do
-	filt_arg="$(echo $arg | sed "s#\(.*\)=.*#\1#g")"
-	value_arg="$(echo $arg | sed "s#.*=\(.*\)#\1#g")"
-	
-	if [[ "_$arg" == "_clean" ]]
-	then
-		clean=1
-		target=1
-	elif [[ "_$arg" == "_depclean" ]]
-	then
-		depclean=1
-		target=1
-	elif [[ "_$arg" == "_depclean" ]]
-	then
-		build=1
-		target=1
-	elif [[ "_$arg" == "_package" ]]
-	then
-		build=1
-		target=1
-		package=1
-	elif [[ "_$arg" == "_install" ]]
-	then
-		build=1
-		target=1
-		package=1
-		install=1
-	elif [[ "_$arg" == "_deploy" ]]
-	then
-		build=1
-		target=1
-		deploy=1
-	elif [[ "_$arg" == "_run-tests" ]]
-	then
-		run_tu=1
-		run_perfo=1
-		run_it=1
-		build=1		
-		target=1
-	elif [[ "_$arg" == "_run-tu" ]]
-	then
-		run_tu=1
-		target=1
-		build=1		
-	elif [[ "_$arg" == "_run-perfo" ]]
-	then
-		run_perfo=1
-		target=1
-		build=1		
-	elif [[ "_$arg" == "_run-it" ]]
-	then
-		run_it=1
-		target=1
-		build=1
-	elif [[ "_$arg" == "_cdash" ]]
-	then
-		cdash=1
-		target=1
-	elif [[ "_$arg" == "_eclipse" ]]
-	then
-		eclipse=1
-		target=1
-	elif [[ "_$arg" == "_upgrade-tools" ]]
-	then
-		upgrade_tools=1
-		target=1
-	elif [[ "_$filt_arg" == "_--tests" ]]
-	then
-		if [[ "_$value_arg" != "_" ]]
-		then
-			tests="$value_arg"
-		fi
-	elif [[ "_$arg" == "_--release" ]]
-	then
-		release=1
-	elif [[ "_$arg" == "_--clang" ]]
-	then
-		clang=1
-	elif [[ "_$arg" == "_--MemorySanitizer" ]]
-	then
-		clang=1
-		MemorySanitizer=1
-	elif [[ "_$arg" == "_--AddressSanitizer" ]]
-	then
-		clang=1
-		AddressSanitizer=1
-	elif [[ "_$arg" == "_--ThreadSanitizer" ]]
-	then
-		clang=1
-		ThreadSanitizer=1
-	elif [[ "_$arg" == "_--DataFlowSanitizer" ]]
-	then
-		clang=1
-		DataFlowSanitizer=1
-	elif [[ "_$arg" == "_--gcov" ]]
-	then
-		gcov=1
-	elif [[ "_$arg" == "_--valgrind" ]]
-	then
-		valgrind=1
-	elif [[ "_$arg" == "_--callgrind" ]]
-	then
-		callgrind=1
-	elif [[ "_$arg" == "_--ftrace" ]]
-	then
-		ftrace=1
-	elif [[ "_$arg" == "_--verbose" ]]
-	then
-		verbose=1
-	elif [[ "_$arg" == "_--ddd" ]]
-	then
-		ddd=1
-		elif [[ "_$arg" == "_help" ]]
-	then
-		usage
-		exit 0
-	fi
-done
-
-function run_test()
-{
-	testname=$(basename $1)
-	command=$1
-	type=$2
-	
-	run=0
-	if [[ "_$tests" == "_" ]]
-	then
-		run=1
-	elif [[ $tests =~ $testname ]]
-	then
-		run=1
-	fi
-	
-	if [ $run -eq 1 ]
-	then	
-        echo "Run $type test $testname"    
-
-		cd $(dirname $command)
-		./$(basename $command)
-		cd -
-	fi
-}
-
-function custom_clean()
-{
-	echo -n
-}
-
-function custom_depclean()
-{
-	echo -n
-}
-	
-function custom_performance_tests()
-{
-	echo -n
-}
-
-function custom_unit_tests()
-{
-	echo -n
-}
-
-function custom_integration_tests()
-{
-	echo -n
-}
-
-function custom_package()
-{
-	echo -n
-}
-
-function custom_install()
-{
-	echo -n
-}
-
-function custom_deploy()
-{
-	echo -n
-}
-
-function clean()
-{
-	make clean	
-	custom_clean
-}
-
-function depclean()
-{
-	eval "find . -type d -name Build ${DEPCLEAN_CUSTOM_PATTERN} -exec rm -rf {} \;"
-	eval "find . -type d -name CMakeFiles ${DEPCLEAN_CUSTOM_PATTERN} -exec rm -rf {} \;"
-	eval "find . -type d -name _CPack_Packages ${DEPCLEAN_CUSTOM_PATTERN} -exec rm -rf {} \;"
-	eval "find . -type d -name Testing ${DEPCLEAN_CUSTOM_PATTERN} -exec rm -rf {} \;"
-	eval "find . -type f -name install_manifest.txt ${DEPCLEAN_CUSTOM_PATTERN} -exec rm -f {} \;"
-	eval "find . -type f -name Makefile ${DEPCLEAN_CUSTOM_PATTERN} -exec rm -f {} \;"
-	eval "find . -type f -name CMakeCache.txt ${DEPCLEAN_CUSTOM_PATTERN} -exec rm -f {} \;"
-	eval "find . -type f -name "cmake_install.cmake" ${DEPCLEAN_CUSTOM_PATTERN} -exec rm -f {} \;"
-	eval "find . -type f -name "CTestConfig.cmake" ${DEPCLEAN_CUSTOM_PATTERN} -exec rm -f {} \;"
-	eval "find . -type f -name "CTestTestfile.cmake" ${DEPCLEAN_CUSTOM_PATTERN} -exec rm -f {} \;"
-	eval "find . -type f -name "DartConfiguration.tcl" ${DEPCLEAN_CUSTOM_PATTERN} -exec rm -f {} \;"
-    rm -rf Testing
-	
-	custom_depclean
-}
-
-function package()
-{
-	echo -n
-	custom_package
-}
-
-function install()
-{
-	echo -n
-	custom_install
-}
-
-function deploy()
-{
-	echo -n
-	custom_deploy
-}
-
-#Performance tests 
-function performance_tests()
-{
-	find . -type f -name "*-perfo-test" > /tmp/.tests 
-
-	exec 3</tmp/.tests 
-	while read -u3 command    
-	do
-		run_test $command "performance"
-	done
-	
-	custom_performance_tests
-}
-
-#Unit tests
-function unit_tests()
-{
-	find . -type f -name "*-unit-test" > /tmp/.tests 
-	
-	exec 3</tmp/.tests 
-	while read -u3 command    
-	do
-		run_test $command "unit"
-	done
-	
-	custom_unit_tests
-}
-
-#Unit tests
-function integration_tests()
-{
-	find . -type f -name "*-integration-test" > /tmp/.tests 
-	
-	exec 3</tmp/.tests 
-	while read -u3 command    
-	do    
-		run_test $command "integration"
-	done
-	
-	custom_integration_tests
-}
-
-function cdash()
-{
-	$command_opts ctest -V -D Experimental -D NightlyMemCheck
-}
-
-function eclipse()
-{
-	cmake . -G"Eclipse CDT4 - Unix Makefiles" -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_COMPILER_ARG1=-std=c++11
-}
-
-function upgrade()
-{
-	mv $0 $0.bak
-	wget https://raw.githubusercontent.com/turdusmerula/cmake-tools/master/build
-	chmod +x build
-	if [[ ! -f build-config ]]
-	then
-	   wget https://raw.githubusercontent.com/turdusmerula/cmake-tools/master/build-config
-	fi
-}
-
-if [ -f build-config ]
-then
-	source build-config
+	cmake_opts="$cmake_opts -DCMAKE_TOOLCHAIN_FILE=${config}"
 fi
 
-#Output anything outputted by the test program if the test should fail.
-CTEST_OUTPUT_ON_FAILURE=true
-
-if [ $gcov -eq 1 ] || [ $callgrind -eq 1 ] || [ $valgrind -eq 1 ] || [ $ftrace -eq 1 ]
+if [ $opt_target -eq 0 ]
 then
-	#No build type added in this case
-	release=0
-	#TODO: add a check to forbing usage of those options at the same time
-elif [ $release -eq 1 ]
-then
-	cmake_opts="$cmake_opts -DCMAKE_BUILD_TYPE=Release"
-else
-	cmake_opts="$cmake_opts -DCMAKE_BUILD_TYPE=Debug"
-fi 
-
-if [ $clang -eq 1 ]
-then
-	#TODO: add configuration for clang path
-	cmake_opts="$cmake_opts -DCMAKE_C_COMPILER=/usr/bin/clang -DCMAKE_CXX_COMPILER=/usr/bin/clang++"	
+	eval "cmake $args $cmake_opts"
 fi
-
-if [ $gcov -eq 1 ]
-then
-	#TODO: add configuration for gcov path
-	cmake_opts="$cmake_opts -DCMAKE_CXX_FLAGS:STRING=\"-g -O0 -fprofile-arcs -ftest-coverage\""	
-	cmake_opts="$cmake_opts -DCMAKE_C_FLAGS:STRING=\"-g -O0 -fprofile-arcs -ftest-coverage\""	
-	cmake_opts="$cmake_opts -DCOVERAGE_COMMAND:STRING=/usr/bin/gcov"	
-fi
-
-if [ $valgrind -eq 1 ]
-then
-	#TODO: add configuration for valgrind path
-	command="/usr/bin/valgrind --trace-children=yes --quiet --tool=memcheck --leak-check=yes --show-reachable=yes --num-callers=100 --verbose --demangle=yes"
-	cmake_opts="$cmake_opts -DCMAKE_CXX_FLAGS:STRING=\"-g -O0\""	
-	cmake_opts="$cmake_opts -DCMAKE_C_FLAGS:STRING=\"-g -O0\""	
-fi
-
-if [ $callgrind -eq 1 ]
-then
-	#TODO: add configuration for valgrind path
-	command="/usr/bin/valgrind --tool=callgrind --dump-instr=yes --simulate-cache=yes --callgrind-out-file=Testing/callgrind.out.%p"
-	cmake_opts="$cmake_opts -DCMAKE_CXX_FLAGS:STRING=\"-g -O0\""	
-	cmake_opts="$cmake_opts -DCMAKE_C_FLAGS:STRING=\"-g -O0\""	
-	post_command="kcachegrind $(ls -t -1 Testing/callgrind.out.* | head -n1)"
-fi
-
-if [ $MemorySanitizer -eq 1 ]
-then
-	cmake_opts="$cmake_opts -DCMAKE_CXX_FLAGS:STRING=\"-fsanitize=memory -fno-optimize-sibling-calls -fno-omit-frame-pointer -fsanitize-memory-track-origins=2\""	
-	
-fi
-
-if [ $ftrace -eq 1 ]
-then
-	#TODO: add ftrace tool
-	echo
-fi
-
-if [ $ddd -eq 1 ]
-then
-	#TODO: add configuration for valgrind path
-	command="ddd"
-	cmake_opts="$cmake_opts -DCMAKE_BUILD_TYPE=Debug"	
-fi
-
-if [ $verbose -eq 1 ]
-then
-	cmake_opts="$cmake_opts -DCMAKE_VERBOSE_MAKEFILE=ON"
-	make_opts="$make_opts VERBOSE=1"
-fi
-
-if [ $target -eq 0 ]
-then
-	build=1
-fi
- 
-if [ $depclean -eq 1 ]
-then
-	depclean
-fi
-
-if [ $clean -eq 1 ]
-then
-	clean
-fi
-
-if [ $build -eq 1 ]
-then
-	eval "cmake $cmake_opts ."
-	if [[ $? -ne 0 ]]
-	then
-	   exit 1
-    fi
-	
-	make $make_opts	
-    if [[ $? -ne 0 ]]
-    then
-       exit 1
-    fi
-fi
-
-if [ $run_tu -eq 1 ]
-then
-	unit_tests
-fi
-
-if [ $run_perfo -eq 1 ]
-then
-	performance_tests
-fi
-
-if [ $run_it -eq 1 ]
-then
-	integration_tests
-fi
-
-if [ $package -eq 1 ]
-then
-	package
-fi
-
-if [ $install -eq 1 ]
-then
-	install
-fi
-
-if [ $deploy -eq 1 ]
-then
-	deploy
-fi
-
-if [ $cdash -eq 1 ]
-then
-	cdash
-fi
-
-if [ $eclipse -eq 1 ]
-then
-	eclipse
-fi
-
-if [ $upgrade_tools -eq 1 ]
-then
-	upgrade
-fi
-
-#last command to be run
-$post_command
