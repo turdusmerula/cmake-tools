@@ -32,6 +32,8 @@ function usage()
 	cmake --help 
 	echo >&2
 	
+	echo "ecmake recognizes some specific options in addition to cmake options, see below" >&2
+	echo >&2
     echo "Additional targets:"
     echo "  distclean                    = Clean cmake generated files " 
     echo "  eclipse                      = Generate eclipse project" 
