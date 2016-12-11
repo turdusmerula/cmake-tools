@@ -1,0 +1,41 @@
+#!/bin/bash 
+
+xpl_path=$(cd -P -- "$(dirname -- "$0")" && pwd -P)
+
+function usage()
+{
+	ctest --help 
+	echo >&2
+	
+	echo "ectest recognizes some specific options in addition to ctest options, see below" >&2
+	echo >&2
+	exit 0
+}
+
+ctest_opts=""
+
+opt_target=0
+opt_help=1
+while [[ "_$*" != "_" ]]
+do
+    if [ "_$(echo "$1" | grep '=')" != "_" ]
+    then
+        filt_arg="$(echo $1 | sed "s#\(.*\)=.*#\1#g")"
+        value_arg="$(echo $1 | sed "s#.*=\(.*\)#\1#g")"
+    else
+        filt_arg=$1
+        unset value_arg
+    fi
+
+	if [[ "$filt_arg" == "--help" ]]; then
+	    opt_help=1
+	else
+	    args="$args $1"
+	fi
+	
+	shift
+done
+
+[ $opt_help -eq 1 ] && usage
+
+eval "ctest $args $ctest_opts"

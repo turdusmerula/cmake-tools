@@ -10,6 +10,7 @@ opt_release=0
 opt_coverage=0
 opt_address_sanitizer=0
 opt_leak_sanitizer=0
+opt_verbose=0
 
 function compiler_versions() {
 	compiler=$1
@@ -58,13 +59,6 @@ function usage()
 	echo "  --verbose                    = Enable verbose build" >&2
 	exit 0
 }
-
-help=0
-
-cmake_opts=""
-opt_configure=0
-
-compiler="c++"
 
 function check_option() {
 	option=$1
@@ -317,8 +311,13 @@ function tgt_eclipse()
     cmake_opts="-G \"Eclipse CDT4 - Unix Makefiles\" -DCMAKE_BUILD_TYPE=Debug -DCMAKE_CXX_COMPILER_ARG1=\"-std=c++14\" $cmake_opts"
 }
 
-opt_verbose=0
+cmake_opts=""
+compiler="c++"
+
+opt_help=0
+opt_configure=0
 opt_target=0
+
 while [[ "_$*" != "_" ]]
 do
     if [ "_$(echo "$1" | grep '=')" != "_" ]
@@ -331,7 +330,7 @@ do
     fi
 
 	if [[ "$filt_arg" == "--help" ]]; then
-	    help=1
+	    opt_help=1
 	elif [[ "$filt_arg" == "--debug" ]]; then
 	    opt_debug=1
 	    opt_release=0
@@ -372,11 +371,7 @@ do
 	shift
 done
 
-if [ $help -eq 1 ] 
-then
-	usage
-fi
-
+[ $opt_help -eq 1 ] && usage
 [ $opt_debug -eq 1 ] && debug_on
 [ $opt_release -eq 1 ] && release_on
 [ $opt_gold -eq 1 ] && use_gold
@@ -388,6 +383,7 @@ fi
 
 if [ $opt_verbose -eq 1 ]
 then
+	export CTEST_OUTPUT_ON_FAILURE=1
     cmake_opts="$cmake_opts -DCMAKE_VERBOSE_MAKEFILE=ON"
 else
     cmake_opts="$cmake_opts -DCMAKE_VERBOSE_MAKEFILE=OFF"
