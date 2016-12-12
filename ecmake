@@ -35,6 +35,7 @@ function usage()
 	
 	echo "ecmake recognizes some specific options in addition to cmake options, see below" >&2
 	echo >&2
+	
     echo "Additional targets:"
     echo "  distclean                    = Clean cmake generated files " 
     echo "  eclipse                      = Generate eclipse project" 
@@ -57,6 +58,7 @@ function usage()
 	[ $opt_ccache -eq 1 ] &&    echo "  --[no-]ccache                = Use [or not] ccache to speed up build (used by default)" >&2
 	[ $opt_ccache -eq 1 ] ||    echo "  --[no-]ccache                = Use [or not] ccache to speed up build" >&2
 	echo "  --verbose                    = Enable verbose build" >&2
+    echo >&2
 	exit 0
 }
 
@@ -391,11 +393,11 @@ fi
 
 if [ $opt_configure -eq 1 ]
 then
-	[ -f /usr/lib/ecmake/configure.cmake ] && config=/usr/lib/ecmake/configure.cmake
-	[ -f /usr/local/lib/ecmake/configure.cmake ] && config=/usr/local/lib/ecmake/configure.cmake
+	[ -f /usr/lib/ecmake/cmake_script.cmake ] && config=/usr/lib/ecmake/cmake_script.cmake
+	[ -f /usr/local/lib/ecmake/cmake_script.cmake ] && config=/usr/local/lib/ecmake/cmake_script.cmake
 	if [ "_${config}" == "_" ]
 	then
-		echo "configure.cmake not found" >&2
+		echo "cmake_script.cmake not found" >&2
 		exit 1 
 	fi
 	cmake_opts="$cmake_opts -DCMAKE_TOOLCHAIN_FILE=${config}"

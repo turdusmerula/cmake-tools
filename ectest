@@ -9,13 +9,14 @@ function usage()
 	
 	echo "ectest recognizes some specific options in addition to ctest options, see below" >&2
 	echo >&2
+	
 	exit 0
 }
 
 ctest_opts=""
 
 opt_target=0
-opt_help=1
+opt_help=0
 while [[ "_$*" != "_" ]]
 do
     if [ "_$(echo "$1" | grep '=')" != "_" ]
