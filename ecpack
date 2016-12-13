@@ -31,7 +31,7 @@ function check_ssh() {
 	ssh -o PasswordAuthentication=no ${opt_user}@${opt_mirror} exit &>/dev/null
 	if [ $? -ne 0 ]
 	then
-		echo "Error: publickey connection to ${debian_repo_url} failed"
+		echo "Error: publickey connection to ${opt_mirror} failed"
 		return 0
 	fi
 	
@@ -42,7 +42,7 @@ function get_release_version() {
 	name=$1
 	version=$2	
 	
-	check_ssh() && exit 1
+	check_ssh && exit 1
 	
 	# get rebuild increment from debian repository
 	package_list="$(ssh ${opt_user}@${opt_mirror} reprepro dumpreferences | grep ${name}_${version})"
@@ -66,7 +66,19 @@ function get_release_version() {
 }
 
 function publish() {
-	echo
+	if [ ! -f CPackConfig.cmake ]
+	then
+		echo "Error CPack configuration file not found (CPackConfig.cmake)" >&2
+		exit 1
+	fi
+	
+	version=$(grep CPACK_PACKAGE_VERSION CPackConfig.cmake | sed -e "s#.*CPACK_PACKAGE_VERSION \"\(.*\)\")#\1#g")
+	name=$(grep CPACK_PACKAGE_NAME CPackConfig.cmake | grep -v "#" | sed -e "s#.*CPACK_PACKAGE_NAME \"\(.*\)\")#\1#g")
+	echo "version: $version"
+	echo "name: $name"
+	
+	release=$(get_release_version $name $version)
+	echo "release: $release"
 }
 
 cpack_opts=""
