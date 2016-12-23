@@ -58,6 +58,7 @@ done
 # check ssh
 ${xpl_path}/ssh-publickey-check ${ppa} ${mirror}
 
+set +e
 if [ "_$version" == "_" ]
 then
 	packages=$(ssh ${ppa}@${mirror} aptly package search "'Name (${package})'" 2>/dev/null)
