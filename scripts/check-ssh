@@ -18,7 +18,7 @@ fi
 ssh -o PasswordAuthentication=no -o StrictHostKeyChecking=no ${user}@${address} exit &>/dev/null
 if [ $? -ne 0 ]
 then
-	echo "Error: publickey connection to ${user}@${address} failed" >&2
+	echo "Error: publickey connection to ${user}@${address} from $USER failed" >&2
 	exit 1
 fi
 
