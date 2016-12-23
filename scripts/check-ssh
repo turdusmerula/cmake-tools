@@ -1,0 +1,25 @@
+#!/bin/bash
+
+# Check if ssh is available with a public key
+
+function usage() {
+	echo "Usage: $0 <user> <address>"
+}
+
+user=$1
+address=$2
+
+if [ $# -ne 2 ]
+then
+	usage
+	exit 1
+fi
+
+ssh -o PasswordAuthentication=no -o StrictHostKeyChecking=no ${user}@${address} exit &>/dev/null
+if [ $? -ne 0 ]
+then
+	echo "Error: publickey connection to ${user}@${address} failed" >&2
+	exit 1
+fi
+
+exit 0

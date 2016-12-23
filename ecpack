@@ -1,0 +1,121 @@
+#!/bin/bash 
+
+xpl_path=$(cd -P -- "$(dirname -- "$0")" && pwd -P)
+
+opt_mirror="localhost"
+opt_repo=testing
+opt_user=$USER
+
+function usage()
+{
+	cpack --help 
+	echo >&2
+
+	echo "ecpack recognizes some specific options in addition to cpack options, see below" >&2
+	echo >&2
+
+    echo "Additional targets:"
+    echo "  publish                      = Publish package to debian repository" >&2
+	echo >&2
+
+	echo "Build options:"
+	echo "  --mirror=url                 = Debian mirror repository url (default ${opt_mirror})" >&2
+	echo "  --repo=name                  = Repository to publish package (default ${opt_repo})" >&2
+	echo "  --user=name                  = User allowed to connect with public key on server (default $USER)" >&2
+	echo >&2
+
+	exit 0
+}
+
+function check_ssh() {
+	ssh -o PasswordAuthentication=no ${opt_user}@${opt_mirror} exit &>/dev/null
+	if [ $? -ne 0 ]
+	then
+		echo "Error: publickey connection to ${opt_mirror} failed"
+		return 0
+	fi
+	
+	return 1
+}
+
+function get_release_version() {
+	name=$1
+	version=$2	
+	
+	check_ssh && exit 1
+	
+	# get rebuild increment from debian repository
+	package_list="$(ssh ${opt_user}@${opt_mirror} reprepro dumpreferences | grep ${name}_${version})"
+	
+	set -e
+	# check if a rebuild version exists
+	rebuild=$(echo $package_list | grep "${name}_${version}-" | sed "s#.*${name}_${version}-\([0-9]*\)_.*#\1#g" | sort | tail -n1)
+	if [[ "_$rebuild" != "_" ]]
+	then
+		# found a previous rebuild version, increment it
+		(( rebuild = rebuild + 1 ))
+	else
+		if [[ "_$(echo $package_list | grep ${package_name}_${package_version}_)" != "_" ]]
+		then
+			# found a release, add first rebuild
+			rebuild=1
+		fi
+	fi
+	
+	return rebuild
+}
+
+function publish() {
+	if [ ! -f CPackConfig.cmake ]
+	then
+		echo "Error CPack configuration file not found (CPackConfig.cmake)" >&2
+		exit 1
+	fi
+	
+	version=$(grep CPACK_PACKAGE_VERSION CPackConfig.cmake | sed -e "s#.*CPACK_PACKAGE_VERSION \"\(.*\)\")#\1#g")
+	name=$(grep CPACK_PACKAGE_NAME CPackConfig.cmake | grep -v "#" | sed -e "s#.*CPACK_PACKAGE_NAME \"\(.*\)\")#\1#g")
+	echo "version: $version"
+	echo "name: $name"
+	
+	release=$(get_release_version $name $version)
+	echo "release: $release"
+}
+
+cpack_opts=""
+
+opt_target=0
+opt_help=0
+while [[ "_$*" != "_" ]]
+do
+    if [ "_$(echo "$1" | grep '=')" != "_" ]
+    then
+        filt_arg="$(echo $1 | sed "s#\(.*\)=.*#\1#g")"
+        value_arg="$(echo $1 | sed "s#.*=\(.*\)#\1#g")"
+    else
+        filt_arg=$1
+        unset value_arg
+    fi
+
+	if [[ "$filt_arg" == "--help" ]]; then
+	    opt_help=1
+	elif [[ "$filt_arg" == "publish" ]]; then
+	    tgt_publish=1
+	    cpack_opts="${cpack_opts} package"
+	elif [[ "$filt_arg" == "--mirror" ]]; then
+	    opt_mirror=${value_arg}
+	elif [[ "$filt_arg" == "--repo" ]]; then
+	    opt_repo=${value_arg}
+	elif [[ "$filt_arg" == "--user" ]]; then
+	    opt_user=${value_arg}
+	else
+	    args="$args $1"
+	fi
+	
+	shift
+done
+
+[ $opt_help -eq 1 ] && usage
+
+eval "cpack $args $cpack_opts"
+
+[ $tgt_publish -eq 1 ] && publish

@@ -1,0 +1,409 @@
+#!/bin/bash 
+
+xpl_path=$(cd -P -- "$(dirname -- "$0")" && pwd -P)
+
+opt_gold=1
+opt_ccache=1
+opt_ninja=0
+opt_debug=1
+opt_release=0
+opt_coverage=0
+opt_address_sanitizer=0
+opt_leak_sanitizer=0
+opt_verbose=0
+
+function compiler_versions() {
+	compiler=$1
+	
+	version=$(
+		IFS=':'
+		for i in $PATH
+		do 
+			test -d "$i" && find "$i" -maxdepth 1 -executable -name "${compiler}-*" -exec basename {} \; | grep -e "^${compiler}-[0-9]"
+		done | sort | uniq | sed "s#${compiler}-\(.*\)#\1#g"
+	) 
+	echo $version | sed "s# #, #g"
+}
+
+function usage()
+{
+	gcc_versions="$(compiler_versions gcc)"
+	clang_versions="$(compiler_versions clang)"
+	
+	cmake --help 
+	echo >&2
+	
+	echo "ecmake recognizes some specific options in addition to cmake options, see below" >&2
+	echo >&2
+	
+    echo "Additional targets:"
+    echo "  distclean                    = Clean cmake generated files " 
+    echo "  eclipse                      = Generate eclipse project" 
+	[ $opt_ninja -eq 1 ] &&     echo "  ninja                        = Generate ninja build files (default)" >&2
+	[ $opt_ninja -eq 1 ] ||     echo "  ninja                        = Generate ninja build files" >&2
+    echo >&2
+    
+	echo "Build options:"
+	echo "  --debug                      = Build with debug informations (default)" >&2
+	echo "  --release                    = Build for release" >&2
+	echo "  --coverage                   = Build with coverage informations" >&2
+	echo "  --address-sanitizer          = Enable address sanitizer profiler" >&2
+	echo "  --leak-sanitizer             = Enable leak sanitizer profiler" >&2
+	[ -z "$gcc_versions" ]   && echo "  --gcc                        = Build with gcc (default)" >&2
+	[ -z "$gcc_versions" ]   || echo "  --gcc=[version]              = Build with gcc (default), available versions: $gcc_versions" >&2
+	[ -z "$clang_versions" ] && echo "  --clang                      = Build with clang" >&2
+	[ -z "$clang_versions" ] || echo "  --clang=[version]            = Build with clang, available versions: $clang_versions" >&2
+	[ $opt_gold -eq 1 ] &&      echo "  --[no-]ld-gold               = Use [or not] gold linker to speed up link (used by default)" >&2
+	[ $opt_gold -eq 1 ] ||      echo "  --[no-]ld-gold               = Use [or not] gold linker to speed up link" >&2
+	[ $opt_ccache -eq 1 ] &&    echo "  --[no-]ccache                = Use [or not] ccache to speed up build (used by default)" >&2
+	[ $opt_ccache -eq 1 ] ||    echo "  --[no-]ccache                = Use [or not] ccache to speed up build" >&2
+	echo "  --verbose                    = Enable verbose build" >&2
+    echo >&2
+	exit 0
+}
+
+function check_option() {
+	option=$1
+	
+	if [ -z "$2" ]
+	then
+		treat_as_error=0
+	else
+		treat_as_error=$2
+	fi
+		
+	test_file=$(mktemp).cpp
+	echo "int main(int argc, char** argv) { return 0 ; }" > $test_file
+	
+	$compiler $option $test_file -o ${test_file}.o  1>/dev/null 2>/dev/null
+	res=$?
+	
+	if [ $res -ne 0 ]
+	then
+		[ $treat_as_error -eq 0 ] && echo "Skipped Option $option not supported by compiler $compiler" >&2
+		[ $treat_as_error -eq 1 ] && echo "Error Option $option not supported by compiler $compiler" >&2
+		return 0
+	fi
+	
+	rm -f $test_file
+	rm -f ${test_file}.o
+	return 1
+}
+
+function add_option() {
+	variable=$1
+	option=$2
+
+	check_option $option || eval "${variable}=\"${!variable} $option\""
+}
+
+function debug_on() {
+	echo "-- Build with debug informations"
+
+	cmake_opts="$cmake_opts -DCMAKE_BUILD_TYPE=Debug"
+}
+
+function release_on() {
+	echo "-- Build release"
+
+	cmake_opts="$cmake_opts -DCMAKE_BUILD_TYPE=Release"
+}
+
+function coverage_on() {
+	echo "-- Build with coverage informations"
+
+	options="--coverage"
+	check_option "--coverage" 1 && ( echo "Error coverage not available" >&2 ; exit 1 )
+	add_option options "-fno-inline-functions"
+	add_option options "-fno-inline"
+	add_option options "-fprofile-arcs"
+	add_option options "-ftest-coverage"
+
+	cmake_opts="$cmake_opts -DECMAKE_COVERAGE_ON=1 -DECMAKE_COVERAGE_OPTIONS=\"${options}\""
+	opt_configure=1
+}
+
+function address_sanitizer_on() {
+	echo "-- Build with address sanitizer"
+
+	options="-fsanitize=address"
+	if [[ $(check_option "-fsanitize=address" 1) -eq 0 ]]
+	then
+		echo "Error address sanitizer not available" >&2
+		exit 1
+	fi
+	add_option options "-fno-omit-frame-pointer"
+	add_option options "-fno-inline-functions"
+	add_option options "-fno-inline"
+	add_option options "-fsanitize-address-use-after-scope"
+	cmake_opts="$cmake_opts -DECMAKE_ADDRESS_SANITIZER_ON=1 -DECMAKE_ADDRESS_SANITIZER_OPTIONS=\"${options}\""
+	opt_configure=1
+}
+
+function leak_sanitizer_on() {
+	echo "-- Build with leak sanitizer"
+
+	options="-fsanitize=leak"
+	if [[ $(check_option "-fsanitize=leak" 1) -eq 0 ]]
+	then
+		echo "Error leak sanitizer not available" >&2 
+		exit 1
+	fi 
+	add_option options "-fno-omit-frame-pointer"
+	add_option options "-fno-inline-functions"
+	add_option options "-fno-inline"
+	add_option options "-fsanitize-address-use-after-scope"
+	cmake_opts="$cmake_opts -DECMAKE_LEAK_SANITIZER_ON=1 -DECMAKE_LEAK_SANITIZER_OPTIONS=\"${options}\""
+	opt_configure=1
+}
+
+function check_compiler() {
+	compiler=$1
+	version=$2
+	
+	if [ ! -f CMakeCache.txt ]
+	then
+		return 1
+	fi
+	
+	name=$compiler
+	if [ "_$version" != "_" ]
+	then
+		name="$name-$version"
+	fi
+
+	compiler=$(grep -R "(CMAKE_C_COMPILER " *)
+	if [ -z "$compiler" ]
+	then
+		return 1
+	else
+		if [ -z "$( echo \"$compiler\" | grep -e /${name}\" )" ]
+		then
+			echo "Previous build was made with another compiler, remove CMakeFiles before launching or distclean target" >&2
+			return 0
+		fi
+	fi
+
+	return 1	
+}
+
+function use_gcc() {
+	version=$1
+	
+	if [ -z "$version" ]
+	then
+		gcc_name=gcc
+	else
+		gcc_name="gcc-${version}"
+	fi
+	
+	if [[ "_$(which ${gcc_name})" == "_" ]]
+	then
+		echo "-- ${gcc_name} not found !" >&2
+		exit 1
+	fi
+
+	echo "-- Enabling ${gcc_name}"
+	
+	check_compiler gcc $version && exit 1
+	cmake_opts="$cmake_opts -DECMAKE_COMPILER=gcc -DECMAKE_COMPILER_PATH=$(dirname $(which ${gcc_name}))"
+	if [ "_$version" != "_" ]
+	then
+		cmake_opts="$cmake_opts -DECMAKE_COMPILER_VERSION=${version}"
+	fi
+	compiler=$(which ${gcc_name})
+	opt_configure=1
+}
+
+function use_clang() {
+	version=$1
+	
+	if [ -z "$version" ]
+	then
+		clang_name=clang
+	else
+		clang_name="clang-${version}"
+	fi
+
+	if [[ "_$(which ${clang_name})" == "_" ]]
+	then
+		echo "-- ${clang_name} not found !" >&2
+		exit 1
+	fi
+
+	echo "-- Enabling clang-$1"
+	
+	check_compiler clang $version && exit 1
+	cmake_opts="$cmake_opts -DECMAKE_COMPILER=clang"
+	if [ "_$version" != "_" ]
+	then
+		cmake_opts="$cmake_opts -DECMAKE_COMPILER_VERSION=${version} -DECMAKE_COMPILER_PATH=$(dirname $(which ${clang_name}))"
+	fi
+	compiler=$(which ${clang_name})
+	opt_configure=1
+}
+
+function use_gold() {
+	if [[ "_$(which gold)" != "_" ]]
+	then
+		echo "-- Link with gold"
+	
+		cmake_opts="$cmake_opts -DECMAKE_LINKER_GOLD=1"
+		opt_configure=1
+	else
+		echo "-- Linker gold not found" 
+	fi
+}
+
+function use_ccache() {
+	if [[ "_$(which ccache)" != "_" ]]
+	then
+		cmake_opts="$cmake_opts -DECMAKE_USE_CCACHE=1"
+		opt_configure=1
+	else
+		echo "-- ccache not found"
+	fi
+}
+
+function use_ninja() {
+	if [[ "_$(which ninja)" != "_" ]]
+	then
+		cmake_opts="$cmake_opts -G \"Ninja\""
+	else
+		echo "-- ninja not found"
+		exit 1
+	fi
+}
+
+function tgt_distclean()
+{
+	echo "Cleaning cmake generated files"
+	
+	if [ -f Makefile ]
+	then
+		make clean
+	fi
+	
+	if [ -f build.ninja ]
+	then
+		ninja clean 
+	fi
+	
+    eval "find . -depth -type d -name CMakeFiles -print -exec rm -rf {} \;"
+    eval "find . -depth -type d -name _CPack_Packages -print -exec rm -rf {} \;"
+    eval "find . -depth -type d -name Testing -print -exec rm -rf {} \;"
+    eval "find . -depth -type f -name install_manifest.txt -print -exec rm -f {} \;"
+    eval "find . -depth -type f -name Makefile -print -exec rm -f {} \;"
+    eval "find . -depth -type f -name CMakeCache.txt -print -exec rm -f {} \;"
+    eval "find . -depth -type f -name cmake_install.cmake -print -exec rm -f {} \;"
+    eval "find . -depth -type f -name CTestConfig.cmake -print -exec rm -f {} \;"
+    eval "find . -depth -type f -name CTestTestfile.cmake -print -exec rm -f {} \;"
+    eval "find . -depth -type f -name DartConfiguration.tcl -print -exec rm -f {} \;"
+    eval "find . -depth -type f -name CPackConfig.cmake -print -exec rm -f {} \;"
+    eval "find . -depth -type f -name CPackSourceConfig.cmake -print -exec rm -f {} \;"
+    eval "find . -depth -type f -name build.ninja -print -exec rm -f {} \;"
+    eval "find . -depth -type f -name rules.ninja -print -exec rm -f {} \;"
+    eval "find . -depth -type f -name \".ninja_*\" -print -exec rm -f {} \;"
+}
+
+function tgt_eclipse()
+{
+    echo " Create Eclipse project"
+
+    cmake_opts="-G \"Eclipse CDT4 - Unix Makefiles\" -DCMAKE_BUILD_TYPE=Debug -DCMAKE_CXX_COMPILER_ARG1=\"-std=c++14\" $cmake_opts"
+}
+
+cmake_opts=""
+compiler="c++"
+
+opt_help=0
+opt_configure=0
+opt_target=0
+
+while [[ "_$*" != "_" ]]
+do
+    if [ "_$(echo "$1" | grep '=')" != "_" ]
+    then
+        filt_arg="$(echo $1 | sed "s#\(.*\)=.*#\1#g")"
+        value_arg="$(echo $1 | sed "s#.*=\(.*\)#\1#g")"
+    else
+        filt_arg=$1
+        unset value_arg
+    fi
+
+	if [[ "$filt_arg" == "--help" ]]; then
+	    opt_help=1
+	elif [[ "$filt_arg" == "--debug" ]]; then
+	    opt_debug=1
+	    opt_release=0
+	elif [[ "$filt_arg" == "--release" ]]; then
+	    opt_release=1
+	    opt_debug=0
+	elif [[ "$filt_arg" == "--coverage" ]]; then
+	    opt_coverage=1
+	elif [[ "$filt_arg" == "--address-sanitizer" ]]; then
+	    opt_address_sanitizer=1
+	elif [[ "$filt_arg" == "--leak-sanitizer" ]]; then
+	    opt_leak_sanitizer=1
+	elif [[ "$filt_arg" == "--ld-gold" ]]; then
+	    opt_gold=1
+	elif [[ "$filt_arg" == "--no-ld-gold" ]]; then
+	    opt_gold=0
+	elif [[ "$filt_arg" == "--gcc" ]]; then
+	    use_gcc $value_arg
+	elif [[ "$filt_arg" == "--clang" ]]; then
+	    use_clang $value_arg
+	elif [[ "$filt_arg" == "--ccache" ]]; then
+	    opt_ccache=1
+	elif [[ "$filt_arg" == "--no-ccache" ]]; then
+	    opt_ccache=0
+	elif [[ "$filt_arg" == "ninja" ]]; then
+	    use_ninja
+	elif [[ "$filt_arg" == "--verbose" ]]; then
+	    opt_verbose=1
+	elif [[ "$filt_arg" == "distclean" ]]; then
+	    tgt_distclean
+	    opt_target=1
+	elif [[ "$filt_arg" == "eclipse" ]]; then
+	    tgt_eclipse
+	else
+	    args="$args $1"
+	fi
+	
+	shift
+done
+
+[ $opt_help -eq 1 ] && usage
+[ $opt_debug -eq 1 ] && debug_on
+[ $opt_release -eq 1 ] && release_on
+[ $opt_gold -eq 1 ] && use_gold
+[ $opt_coverage -eq 1 ] && coverage_on
+[ $opt_address_sanitizer -eq 1 ] && address_sanitizer_on
+[ $opt_leak_sanitizer -eq 1 ] && leak_sanitizer_on
+[ $opt_ccache -eq 1 ] && use_ccache
+[ $opt_ninja -eq 1 ] && use_ninja
+
+if [ $opt_verbose -eq 1 ]
+then
+	export CTEST_OUTPUT_ON_FAILURE=1
+    cmake_opts="$cmake_opts -DCMAKE_VERBOSE_MAKEFILE=ON"
+else
+    cmake_opts="$cmake_opts -DCMAKE_VERBOSE_MAKEFILE=OFF"
+fi
+
+if [ $opt_configure -eq 1 ]
+then
+	[ -f /usr/lib/ecmake/cmake_script.cmake ] && config=/usr/lib/ecmake/cmake_script.cmake
+	[ -f /usr/local/lib/ecmake/cmake_script.cmake ] && config=/usr/local/lib/ecmake/cmake_script.cmake
+	if [ "_${config}" == "_" ]
+	then
+		echo "cmake_script.cmake not found" >&2
+		exit 1 
+	fi
+	cmake_opts="$cmake_opts -DCMAKE_TOOLCHAIN_FILE=${config}"
+fi
+
+if [ $opt_target -eq 0 ]
+then
+	eval "cmake $args $cmake_opts"
+fi
