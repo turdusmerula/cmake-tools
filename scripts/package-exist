@@ -5,10 +5,10 @@ set -e
 xpl_path=$(cd -P -- "$(dirname -- "$0")" && pwd -P)
 
 function usage() {
-	echo "Usage: $0 <mirror> <ppa> <repository> <expression> [<options>]" >&2
+	echo "Usage: $0 <mirror> <ppa> <repository> <package> [<options>]" >&2
 	echo >&2
 	echo "Options:"
-	#	echo "  --distribution=name          = change distribution (default=${distribution})" >&2
+	echo "  --version=version            = search for peculiar version" >&2
 	echo >&2
 }
 
@@ -22,7 +22,8 @@ fi
 mirror=""
 ppa=""
 repository=""
-expression=""
+package=""
+version=""
 while [[ "_$*" != "_" ]]
 do
     if [ "_$(echo "$1" | grep '=')" != "_" ]
@@ -36,14 +37,19 @@ do
 
 	if [[ "$filt_arg" == "--distribution" ]]; then
 	    distribution=$value_arg
+	elif [[ "$filt_arg" == "--version" ]]; then
+	    version=$value_arg
 	elif [[ "_$mirror" == "_" ]]; then
 	    mirror=$filt_arg
 	elif [[ "_$ppa" == "_" ]]; then
 	    ppa=$filt_arg
 	elif [[ "_$repository" == "_" ]]; then
 	    repository=$filt_arg
-	elif [[ "_$expression" == "_" ]]; then
-	    expression=$filt_arg
+	elif [[ "_$package" == "_" ]]; then
+	    package=$filt_arg
+	else
+		echo "Error: to many arguments" >&2
+		exit 1
 	fi
 	
 	shift
@@ -52,11 +58,13 @@ done
 # check ssh
 ${xpl_path}/ssh-publickey-check ${ppa} ${mirror}
 
-#ssh ${ppa}@${mirror} aptly package search "'Name (${expression})'"
-packages=$(ssh ${ppa}@${mirror} aptly package search "'Name (${expression})'" 2>/dev/null)
-#[ $? -ne 0 ] && exit 1
+if [ "_$version" == "_" ]
+then
+	packages=$(ssh ${ppa}@${mirror} aptly package search "'Name (${package})'" 2>/dev/null)
+else
+	packages=$(ssh ${ppa}@${mirror} aptly package search "'Name (${package}), \$Version (%${version}-*)'" 2>/dev/null)	
+fi
 
-# search expression
 if [[ "_${packages}" == "_" ]]
 then
 	echo 0
