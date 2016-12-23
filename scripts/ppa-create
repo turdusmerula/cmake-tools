@@ -95,9 +95,8 @@ then
 	echo "deb [ arch=amd64 ] ssh://${ppa}@$(hostname)/home/${ppa}/.aptly/public/testing rosa main"
 	echo "deb [ arch=amd64 ] ssh://${ppa}@$(hostname)/home/${ppa}/.aptly/public/stable rosa main"
 	echo 
-	echo "Enable your ssh access with the following commands, for the user and for root: "
-	echo "cat ~/.ssh/id_rsa.pub | ssh root@$(hostname) 'cat - >> /home/${ppa}/.ssh/authorized_keys'"
-	echo "sudo cat ~/.ssh/id_rsa.pub | ssh root@$(hostname) 'cat - >> /home/${ppa}/.ssh/authorized_keys'"
+	echo "Enable your publickey ssh access with the script ssh-copy-ids: "
+	echo "ssh-copy-ids ${ppa} $(hostname)"
 		
 	if [ $opt_add -eq 1 ]
 	then

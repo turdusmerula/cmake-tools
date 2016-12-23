@@ -50,7 +50,7 @@ do
 done
 
 # check ssh
-${xpl_path}/check-ssh ${ppa} ${mirror}
+${xpl_path}/ssh-publickey-check ${ppa} ${mirror}
 
 #ssh ${ppa}@${mirror} aptly package search "'Name (${expression})'"
 packages=$(ssh ${ppa}@${mirror} aptly package search "'Name (${expression})'" 2>/dev/null)

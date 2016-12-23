@@ -54,7 +54,7 @@ do
 	shift
 done
 
-${xpl_path}/check-ssh $ppa $mirror
+${xpl_path}/ssh-publickey-check $ppa $mirror
 
 find_package=$(ssh ${ppa}@${mirror} aptly package search "'Name (${package}), $Version (%${version}-*)'" 2>/dev/null | sort -r | head -n1)
 

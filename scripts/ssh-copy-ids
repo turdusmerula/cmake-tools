@@ -1,0 +1,47 @@
+#!/bin/bash
+
+set -e
+
+# Copy public keys for current user and sudo user to server
+# the target connection user is root for the server
+
+xpl_path=$(cd -P -- "$(dirname -- "$0")" && pwd -P)
+
+function usage() {
+	echo "Usage: $0 <user> <address>"
+}
+
+user=$1
+address=$2
+
+if [ $# -ne 2 ]
+then
+	usage
+	exit 1
+fi
+
+echo "Connection is made with via root@${address}, password may be asked several times"
+
+# copy key to server
+echo "Copy key for current user ($USER)"
+cat ~/.ssh/id_rsa.pub | ssh root@${address} "cat - >> /home/${user}/.ssh/authorized_keys"
+
+sudo su - <<EOF
+echo "Copy key for $USER"
+cat ~/.ssh/id_rsa.pub | ssh root@${address} "cat - >> /home/${user}/.ssh/authorized_keys"
+EOF
+
+echo "Check conection for ${USER}"
+${xpl_path}/ssh-publickey-check $user $address
+
+echo "Check connection for sudo"
+sudo ${xpl_path}/ssh-publickey-check $user $address
+
+echo "Clear duplicated keys"
+ssh ${user}@${address} bash <<EOF
+cat ~/.ssh/authorized_keys | sort | uniq > ~/.ssh/authorized_keys.0
+cat ~/.ssh/authorized_keys.0 > ~/.ssh/authorized_keys
+rm ~/.ssh/authorized_keys.0
+EOF
+
+exit 0
