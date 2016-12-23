@@ -4,10 +4,10 @@ set -e
 
 xpl_path=$(cd -P -- "$(dirname -- "$0")" && pwd -P)
 
-distribution=$(${xpl_path}/get-distribution.sh)
+distribution=$(${xpl_path}/get-distribution)
 
 function usage() {
-	echo "Usage: $0 <server> <ppa> <repository> <package> [<options>]" >&2
+	echo "Usage: $0 <mirror> <ppa> <repository> <package> [<options>]" >&2
 	echo >&2
 	echo "Options:"
 	echo "  --distribution=name          = change distribution (default=${distribution})" >&2
@@ -21,7 +21,7 @@ then
 fi
 
 
-server=""
+mirror=""
 ppa=""
 repository=""
 package=""
@@ -38,8 +38,8 @@ do
 
 	if [[ "$filt_arg" == "--distribution" ]]; then
 	    distribution=$value_arg
-	elif [[ "_$server" == "_" ]]; then
-	    server=$filt_arg
+	elif [[ "_$mirror" == "_" ]]; then
+	    mirror=$filt_arg
 	elif [[ "_$ppa" == "_" ]]; then
 	    ppa=$filt_arg
 	elif [[ "_$repository" == "_" ]]; then
@@ -52,18 +52,18 @@ do
 done
 
 # copy file to add to repo
-scp $package ${ppa}@${server}:/home/${ppa}/dropin/
+scp $package ${ppa}@${mirror}:/home/${ppa}/dropin/
 
 # add file to repo
-ssh ${ppa}@${server} aptly repo add ${repository} /home/${ppa}/dropin/$(basename $package)
+ssh ${ppa}@${mirror} aptly repo add ${repository} /home/${ppa}/dropin/$(basename $package)
 
 # cleanup
-ssh ${ppa}@${server} rm -f /home/${ppa}/dropin/$(basename $package)
+ssh ${ppa}@${mirror} rm -f /home/${ppa}/dropin/$(basename $package)
 
 # deploy repo
-if [ "_$(ssh ${ppa}@${server} aptly publish list | grep ${repository}/)" == "_" ]
+if [ "_$(ssh ${ppa}@${mirror} aptly publish list | grep ${repository}/)" == "_" ]
 then
-	ssh ${ppa}@${server} aptly publish repo -skip-signing=true -distribution=${distribution} -architectures=amd64 ${repository} ${repository}
+	ssh ${ppa}@${mirror} aptly publish repo -skip-signing=true -distribution=${distribution} -architectures=amd64 ${repository} ${repository}
 else
-	ssh ${ppa}@${server} aptly publish update -skip-signing=true ${distribution} ${repository} 
+	ssh ${ppa}@${mirror} aptly publish update -skip-signing=true ${distribution} ${repository} 
 fi
