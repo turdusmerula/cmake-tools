@@ -1,0 +1,27 @@
+#!/bin/bash
+
+# Get the next release number of a package on repository
+
+set -e
+
+xpl_path=$(cd -P -- "$(dirname -- "$0")" && pwd -P)
+
+function usage() {
+	echo "Usage: $0 <mirror> <ppa> <repository> <package> <version> [<options>]" >&2
+	echo >&2
+	echo "Options:"
+	#	echo "  --distribution=name          = change distribution (default=${distribution})" >&2
+	echo >&2
+}
+
+if [ $# -lt 5 ]
+then
+	usage
+	exit 1
+fi
+
+release=$(${xpl_path}/package-release $*)
+
+(( release = release + 1 ))
+
+echo $release
