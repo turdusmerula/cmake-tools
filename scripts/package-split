@@ -55,7 +55,13 @@ function create_retail() {
 	sed -i -e "s#\(Package: .*\)-all#\1#g" /tmp/split-deb-retail/DEBIAN/control
 	sed -i -e '/Installed-Size:.*/d' /tmp/split-deb-retail/DEBIAN/control
 	sed -i -e "s#\(Provides: .*\)-all#\1#g" /tmp/split-deb-retail/DEBIAN/control
-
+	
+	# change dev dependancies to retail
+	while [ "_$(grep 'Depends:' /tmp/split-deb-retail/DEBIAN/control | grep -- '-dev')" != "_" ]
+	do
+		sed -i -e "s#\(Depends: .*\)-dev\(.*\)#\1\2#g" /tmp/split-deb-retail/DEBIAN/control
+	done
+	
 	# copy so files
 	for file in $(find /tmp/split-deb-dev -name "*.so*" -o -name "*.a")
 	do
@@ -82,9 +88,15 @@ function create_dev() {
 	# modify control file
 	retail_name=$(grep "Package:" /tmp/split-deb-dev/DEBIAN/control | sed -e "s#Package: \(.*\)-all#\1#g")
 	sed -i -e '/Installed-Size:.*/d' /tmp/split-deb-dev/DEBIAN/control
-	sed -i -e '/Depends:.*/d' /tmp/split-deb-dev/DEBIAN/control
 	sed -i -e 's/-all/-dev/g' /tmp/split-deb-dev/DEBIAN/control
-	echo "Depends: ${retail_name}" >> /tmp/split-deb-dev/DEBIAN/control
+
+	# add dependency to retail package
+	if [ "_$(grep 'Depends:' /tmp/split-deb-dev/DEBIAN/control)" == "_" ]
+	then
+		echo "Depends: ${retail_name}" >> /tmp/split-deb-dev/DEBIAN/control
+	else
+		sed -i -e "s#\(Depends:.*\)#\1,${retail_name}#g" /tmp/split-deb-dev/DEBIAN/control	
+	fi
 	
 	# remove empty directories
 	while [ -n "$(find /tmp/split-deb-dev -depth -type d -empty -exec rmdir {} +)" ]; do :; done
