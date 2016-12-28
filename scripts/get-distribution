@@ -1,3 +1,13 @@
 #!/bin/bash
 
-grep DISTRIB_CODENAME /etc/lsb-release | sed "s#DISTRIB_CODENAME=\(.*\)#\1#g"
+if [ -f /etc/lsb-release ]
+then
+	grep DISTRIB_CODENAME /etc/lsb-release | sed "s#DISTRIB_CODENAME=\(.*\)#\1#g"
+	exit 0
+elif [ -f /etc/os-release ]
+then
+	grep -e "VERSION=" /etc/os-release | sed "s#.* (\(.*\))\"#\1#g"
+	exit 0
+fi
+
+exit 1
