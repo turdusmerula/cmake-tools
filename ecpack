@@ -83,6 +83,7 @@ function publish() {
 
 cpack_opts=""
 
+tgt_publish=0
 opt_target=0
 opt_help=0
 while [[ "_$*" != "_" ]]
