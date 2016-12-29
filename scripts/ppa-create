@@ -76,6 +76,9 @@ fi
 su - $ppa <<ESU
 echo "{}" > .aptly.conf
 mkdir -p .ssh
+touch .ssh/authorized_keys
+chmod go-rwx .ssh/authorized_keys
+chmod u=rw .ssh/authorized_keys
 mkdir -p dropin
 aptly repo create stable >/dev/null 
 aptly repo create testing >/dev/null
