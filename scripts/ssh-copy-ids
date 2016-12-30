@@ -31,7 +31,7 @@ echo "Copy key for $USER"
 cat ~/.ssh/id_rsa.pub | ssh root@${address} "cat - >> /home/${user}/.ssh/authorized_keys"
 EOF
 
-echo "Check conection for ${USER}"
+echo "Check connection for ${USER}"
 ${xpl_path}/ssh-publickey-check $user $address
 
 echo "Check connection for sudo"

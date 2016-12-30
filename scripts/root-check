@@ -1,0 +1,10 @@
+#!/bin/bash
+
+# check root permissions
+if [ $(id -u) -ne 0 ]
+then
+    echo "$0 must be run as root" >&2
+    exit 1
+fi
+
+exit 0
