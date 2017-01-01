@@ -1,88 +1,283 @@
 #!/bin/bash 
 
+
 xpl_path=$(cd -P -- "$(dirname -- "$0")" && pwd -P)
 
 opt_mirror="localhost"
 opt_repo=testing
-opt_user=$USER
+opt_ppa=test
+opt_config=CPackConfig.cmake
+opt_verbose=0
+opt_package_name=""
+opt_package_version=""
+opt_package_dir=""
+opt_package_vendor=""
+opt_package_maintainer=""
+opt_package_depends=""
+opt_package_control_extra=""
+opt_package_description=""
+opt_help=0
+opt_version=0
+opt_debug=0
+opt_split=1
+
+cmake_opts=""
+
+if [ $opt_debug -eq 1 ]
+then
+	scripts_path=${xpl_path}/scripts
+else
+	scripts_path=/usr/local/share/ecmake
+fi
 
 function usage()
 {
-	cpack --help 
+	echo "Usage" >&2
+	echo >&2
+  	echo "$0 [options]" >&2
+  	echo >&2
+	echo "$0 comes in replacement for cpack to build debian packages, see below" >&2
 	echo >&2
 
-	echo "ecpack recognizes some specific options in addition to cpack options, see below" >&2
-	echo >&2
-
-    echo "Additional targets:"
+    echo "Targets:"
+    echo "  package                      = Create package using checkinstall (default)" >&2
     echo "  publish                      = Publish package to debian repository" >&2
 	echo >&2
 
-	echo "Build options:"
-	echo "  --mirror=url                 = Debian mirror repository url (default ${opt_mirror})" >&2
-	echo "  --repo=name                  = Repository to publish package (default ${opt_repo})" >&2
-	echo "  --user=name                  = User allowed to connect with public key on server (default $USER)" >&2
+	echo "Package options:"
+	echo "  --mirror=url                        = Debian mirror repository url (default ${opt_mirror})" >&2
+	echo "  --repo=name                         = Repository to publish package (default ${opt_repo})" >&2
+	echo "  --ppa=name                          = Name of the ppa to connect with public key on server (default $opt_ppa)" >&2
+  	echo "  --config=<config file>              = Specify the config file (default ${opt_config})" >&2
+	echo "  --split=<on|off>                    = Split package into dev and retail version" >&2
+	echo "  --verbose                           = Enable verbose output" >&2
+	echo "  --package-name=<name>               = Override/define CPACK_PACKAGE_NAME" >&2
+	echo "  --package-version=<version>         = Override/define CPACK_PACKAGE_VERSION" >&2
+	echo "  --package-dir=<directory>           = Override/define CPACK_PACKAGE_DIRECTORY" >&2
+	echo "  --package-vendor=<name>             = Override/define CPACK_PACKAGE_VENDOR" >&2
+	echo "  --package-maintainer=<mail>         = Override/define CPACK_DEBIAN_PACKAGE_MAINTAINER" >&2
+	echo "  --package-depends=<packages>        = Override/define CPACK_DEBIAN_PACKAGE_DEPENDS" >&2
+	echo "  --package-control-extra=<scripts>   = Override/define CPACK_DEBIAN_PACKAGE_CONTROL_EXTRA" >&2
+	echo "  --package-description=<value>       = Override/define CPACK_PACKAGE_DESCRIPTION_SUMMARY" >&2
+	echo "  --help                              = Print usage information and exit" >&2
+	echo "  --version                           = Print version number and exit" >&2
 	echo >&2
 
 	exit 0
 }
 
-function check_ssh() {
-	ssh -o PasswordAuthentication=no ${opt_user}@${opt_mirror} exit &>/dev/null
-	if [ $? -ne 0 ]
-	then
-		echo "Error: publickey connection to ${opt_mirror} failed"
-		return 0
-	fi
-	
-	return 1
+function version() {
+	#TODO
+	echo "ecpack version 1.0.0"
+	echo
+	echo "cmake-tools suite maintained and supported by Sébastien Besombes."
+	exit 0
 }
 
-function get_release_version() {
-	name=$1
-	version=$2	
-	
-	check_ssh && exit 1
-	
-	# get rebuild increment from debian repository
-	package_list="$(ssh ${opt_user}@${opt_mirror} reprepro dumpreferences | grep ${name}_${version})"
-	
-	set -e
-	# check if a rebuild version exists
-	rebuild=$(echo $package_list | grep "${name}_${version}-" | sed "s#.*${name}_${version}-\([0-9]*\)_.*#\1#g" | sort | tail -n1)
-	if [[ "_$rebuild" != "_" ]]
+function vecho() {
+	if [ $opt_verbose -eq 1 ]
 	then
-		# found a previous rebuild version, increment it
-		(( rebuild = rebuild + 1 ))
-	else
-		if [[ "_$(echo $package_list | grep ${package_name}_${package_version}_)" != "_" ]]
-		then
-			# found a release, add first rebuild
-			rebuild=1
-		fi
+		echo $*
 	fi
+}
+
+function read_config() {
+	if [ ! -f ${opt_config} ]
+	then
+		echo "Error CPack configuration file not found (${opt_config})" >&2
+		exit 1
+	fi
+
+	if [ "_$opt_package_name" == "_" ]
+	then
+		name=$(grep -e '(CPACK_PACKAGE_NAME ' ${opt_config} | grep -v "#" | sed -e "s#.*CPACK_PACKAGE_NAME \"\(.*\)\")#\1#g")
+	else
+		name=$opt_package_name
+	fi
+	vecho "name: $name"
+
+	if [ "_$opt_package_version" == "_" ]
+	then
+		version=$(grep -e '(CPACK_PACKAGE_VERSION ' ${opt_config} | sed -e "s#.*CPACK_PACKAGE_VERSION \"\(.*\)\")#\1#g")
+	else
+		version=$opt_package_version
+	fi
+	vecho "version: $version"
+
+	release=$(${scripts_path}/package-next-release $opt_mirror $opt_ppa $opt_repo $name $version)
+	vecho "release: $release"
 	
-	return rebuild
+	if [ "_$opt_package_vendor" == "_" ]
+	then
+		vendor=$(grep -e '(CPACK_PACKAGE_VENDOR ' ${opt_config} | sed -e "s#.*CPACK_PACKAGE_VENDOR \"\(.*\)\")#\1#g")
+	else
+		vendor=$opt_package_vendor
+	fi
+	vecho "vendor: $vendor"
+	
+	if [ "_$opt_package_maintainer" == "_" ]
+	then
+		maintainer=$(grep -e '(CPACK_DEBIAN_PACKAGE_MAINTAINER ' ${opt_config} | sed -e "s#.*CPACK_DEBIAN_PACKAGE_MAINTAINER \"\(.*\)\")#\1#g")
+	else
+		maintainer=$opt_package_maintainer
+	fi
+	vecho "maintainer: $maintainer"
+
+	if [ "_$opt_package_depends" == "_" ]
+	then
+		depends=$(grep -e '(CPACK_DEBIAN_PACKAGE_DEPENDS ' ${opt_config} | sed -e "s#.*CPACK_DEBIAN_PACKAGE_DEPENDS \"\(.*\)\")#\1#g")
+	else
+		depends=$opt_package_depends
+	fi
+	vecho "depends: $depends"
+
+	if [ "_$opt_package_control_extra" == "_" ]
+	then
+		control_extra=$(grep -e '(CPACK_DEBIAN_PACKAGE_CONTROL_EXTRA ' ${opt_config} | sed -e "s#.*CPACK_DEBIAN_PACKAGE_CONTROL_EXTRA \"\(.*\)\")#\1#g")
+	else
+		control_extra=$opt_package_control_extra
+	fi
+	vecho "control_extra: $control_extra"
+
+	if [ "_$opt_package_description" == "_" ]
+	then
+		description=$(grep -e '(CPACK_PACKAGE_DESCRIPTION_SUMMARY ' ${opt_config} | sed -e "s#.*CPACK_PACKAGE_DESCRIPTION_SUMMARY \"\(.*\)\")#\1#g")
+	else
+		description=$opt_package_description
+	fi
+	vecho "description: $description"
+}
+
+function package() {
+	echo "CPack: package $name-$version-$release"
+	
+	output=$(mktemp -d)
+	vecho "ECPack: temporary build dir in ${output}"
+
+	if [ $opt_split -eq 0 ]
+	then
+		pkgname=$name
+		DESTDIR=${output} cmake $cmake_opts --build . --target install
+		
+		# create control file
+		mkdir -p ${output}/DEBIAN
+		chmod 0755 ${output}/DEBIAN
+		echo "Package: $name" > ${output}/DEBIAN/control
+		echo "Priority: extra" >> ${output}/DEBIAN/control
+		echo "Section: Development" >> ${output}/DEBIAN/control
+		echo "Maintainer: $maintainer" >> ${output}/DEBIAN/control
+		echo "Architecture: amd64" >> ${output}/DEBIAN/control
+		echo "Depends: ${depends}" >> ${output}/DEBIAN/control
+		echo "Version: ${version}-${release}" >> ${output}/DEBIAN/control
+		echo "Provides: $name" >> ${output}/DEBIAN/control
+		echo "Description: $description" >> ${output}/DEBIAN/control
+		
+		if [ "_${control_extra}" != "_" ]
+		then
+			echo ${control_extra} | sed "s#;# #g" | xargs cp -t ${output}/DEBIAN
+			find ${output}/DEBIAN | xargs chmod 0755 
+		fi
+		
+		dpkg -b ${output} ${pkgname}_${version}-${release}_amd64.deb
+	else
+		mkdir -p ${output}/${name}-dev
+		mkdir -p ${output}/${name}
+	
+		output_dev=${output}/${name}-dev
+		output_retail=${output}/${name}
+		
+		# install files in retail package
+		DESTDIR=${output_retail} cmake $cmake_opts --build . --target install
+
+		## create retail package
+		mkdir -p ${output_retail}/DEBIAN
+		chmod 0755 ${output_retail}/DEBIAN
+		
+		# create control file
+		echo "Package: ${name}" > ${output_retail}/DEBIAN/control
+		echo "Priority: extra" >> ${output_retail}/DEBIAN/control
+		echo "Section: Development" >> ${output_retail}/DEBIAN/control
+		echo "Maintainer: $maintainer" >> ${output_retail}/DEBIAN/control
+		echo "Architecture: amd64" >> ${output_retail}/DEBIAN/control
+		echo "Depends: ${depends}" >> ${output_retail}/DEBIAN/control
+		echo "Version: ${version}-${release}" >> ${output_retail}/DEBIAN/control
+		echo "Provides: $name" >> ${output_retail}/DEBIAN/control
+		echo "Description: $description" >> ${output_retail}/DEBIAN/control
+		
+		if [ "_${control_extra}" != "_" ]
+		then
+			echo ${control_extra} | sed "s#;# #g" | xargs cp -t ${output_retail}/DEBIAN
+			find ${output_retail}/DEBIAN | xargs chmod 0755 
+		fi
+		
+		# mode include files
+		if [ -d ${output_retail}/usr/local/include ]
+		then
+			mkdir -p ${output_dev}/usr/local
+			mv ${output_retail}/usr/local/include ${output_dev}/usr/local
+		fi
+		
+		# package
+		dpkg -b ${output_retail} ${name}_${version}-${release}_amd64.deb
+		
+#		for file in $(find ${output_retail} -name "*.h*" -o -name "*.a")
+#		do
+#			relfile=$(echo $file | sed "s#${output_retail}/##g")
+#			path=$(dirname $relfile)
+#			name=$(basename $relfile)
+			
+#			mkdir -p ${output_retail}/${path}
+#			mv ${file} ${output_retail}/${path}/
+			
+			# remove empty directory hierarchy
+#			while [ "_$(ls -1 ${path}/)" == "_" ]
+#			do
+#				rmdir ${path}
+#				path=${path}/..
+#			done
+#		done
+		
+		
+		## create dev package
+		
+		# create control file
+		mkdir -p ${output_dev}/DEBIAN
+		chmod 0755 ${output_dev}/DEBIAN
+		echo "Package: ${name}-dev" > ${output_dev}/DEBIAN/control
+		echo "Priority: extra" >> ${output_dev}/DEBIAN/control
+		echo "Section: Development" >> ${output_dev}/DEBIAN/control
+		echo "Maintainer: $maintainer" >> ${output_dev}/DEBIAN/control
+		echo "Architecture: amd64" >> ${output_dev}/DEBIAN/control
+		echo "Depends: $name" >> ${output_dev}/DEBIAN/control
+		echo "Version: ${version}-${release}" >> ${output_dev}/DEBIAN/control
+		echo "Provides: $name" >> ${output_dev}/DEBIAN/control
+		echo "Description: $description" >> ${output_dev}/DEBIAN/control
+		
+		# package
+		dpkg -b ${output_dev} ${name}-dev_${version}-${release}_amd64.deb
+	fi	
+	
+	# cleanup
+	if [ $opt_debug -eq 0 ]
+	then
+		rm -rf ${output}
+	fi
 }
 
 function publish() {
-	if [ ! -f CPackConfig.cmake ]
+	echo "CPack: publish $name-$version-$release"
+	
+	${scripts_path}/package-add $opt_mirror $opt_ppa $opt_repo ${name}_${version}-${release}_amd64.deb
+	
+	if [ $opt_split -eq 1 ]
 	then
-		echo "Error CPack configuration file not found (CPackConfig.cmake)" >&2
-		exit 1
+		${scripts_path}/package-add $opt_mirror $opt_ppa $opt_repo ${name}-dev_${version}-${release}_amd64.deb
 	fi
-	
-	version=$(grep CPACK_PACKAGE_VERSION CPackConfig.cmake | sed -e "s#.*CPACK_PACKAGE_VERSION \"\(.*\)\")#\1#g")
-	name=$(grep CPACK_PACKAGE_NAME CPackConfig.cmake | grep -v "#" | sed -e "s#.*CPACK_PACKAGE_NAME \"\(.*\)\")#\1#g")
-	echo "version: $version"
-	echo "name: $name"
-	
-	release=$(get_release_version $name $version)
-	echo "release: $release"
 }
 
 cpack_opts=""
 
+tgt_package=1
 tgt_publish=0
 opt_target=0
 opt_help=0
@@ -97,26 +292,70 @@ do
         unset value_arg
     fi
 
-	if [[ "$filt_arg" == "--help" ]]; then
-	    opt_help=1
-	elif [[ "$filt_arg" == "publish" ]]; then
-	    tgt_publish=1
-	    cpack_opts="${cpack_opts} package"
-	elif [[ "$filt_arg" == "--mirror" ]]; then
+	if [[ "$filt_arg" == "--mirror" ]]; then
 	    opt_mirror=${value_arg}
 	elif [[ "$filt_arg" == "--repo" ]]; then
 	    opt_repo=${value_arg}
-	elif [[ "$filt_arg" == "--user" ]]; then
-	    opt_user=${value_arg}
+	elif [[ "$filt_arg" == "--ppa" ]]; then
+	    opt_ppa=${value_arg}
+	elif [[ "$filt_arg" == "--config" ]]; then
+	    opt_config="${value_arg}"
+	elif [[ "$filt_arg" == "--verbose" ]]; then
+	    opt_verbose=1
+	elif [[ "$filt_arg" == "--split" ]]; then
+	    if [ "_${value_arg}" == "_on" ]; then 
+	    	opt_split=1
+	    elif [ "_${value_arg}" == "_off" ]; then
+	    	opt_split=0
+	    else
+			echo "ECPack Error: invalid parameter $1" >&2
+			echo "Specify --help for usage." >&2
+			exit 1
+		fi	    
+	elif [[ "$filt_arg" == "--package-name" ]]; then
+	    opt_package_name="${value_arg}"
+	elif [[ "$filt_arg" == "--package-version" ]]; then
+	    opt_package_version="${value_arg}"
+	elif [[ "$filt_arg" == "--package-dir" ]]; then
+	    opt_package_dir="${value_arg}"
+	elif [[ "$filt_arg" == "--package-vendor" ]]; then
+	    opt_package_vendor="${value_arg}"
+	elif [[ "$filt_arg" == "--package-maintainer" ]]; then
+	    opt_package_maintainer="${value_arg}"
+	elif [[ "$filt_arg" == "--package-depends" ]]; then
+	    opt_package_depends="${value_arg}"
+	elif [[ "$filt_arg" == "--package-control-extra" ]]; then
+	    opt_package_control_extra="${value_arg}"
+	elif [[ "$filt_arg" == "--package-decription" ]]; then
+	    opt_package_description="${value_arg}"
+	elif [[ "$filt_arg" == "--help" ]]; then
+	    opt_help=1
+	elif [[ "$filt_arg" == "--version" ]]; then
+	    opt_version=1
+	elif [[ "$filt_arg" == "package" ]]; then
+	    tgt_package=1
+	elif [[ "$filt_arg" == "publish" ]]; then
+	    tgt_package=1
+	    tgt_publish=1
 	else
-	    args="$args $1"
+		echo "ECPack Error: invalid parameter $1" >&2
+		echo "Specify --help for usage." >&2
+		exit 1
 	fi
 	
 	shift
 done
 
 [ $opt_help -eq 1 ] && usage
+[ $opt_version -eq 1 ] && version
 
-eval "cpack $args $cpack_opts"
+set -e
+# preinstall
+#echo "ECPack: preinstall"
+#eval "cmake $cmake_opts --build . --target preinstall"
+#eval "cmake $cmake_opts --build ${make_path} --target \"preinstall\""
 
+echo "ECPack: checking config"
+read_config
+[ $tgt_package -eq 1 ] && package
 [ $tgt_publish -eq 1 ] && publish

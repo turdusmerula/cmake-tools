@@ -36,73 +36,75 @@ install=0
 [ $install -eq 1 ] && dpkg -r ${pkg_dev_name}
 [ $install -eq 1 ] && dpkg -r ${pkg_retail_name}
 
-rm -rf /tmp/split-deb-dev
-mkdir /tmp/split-deb-dev
+output=$(mktemp -d)
+
+rm -rf ${output}/split-deb-dev
+mkdir ${output}/split-deb-dev
 
 # unpack debian package
-dpkg-deb -x ${deb_file} /tmp/split-deb-dev
-dpkg-deb --control ${deb_file} /tmp/split-deb-dev/DEBIAN
+dpkg-deb -x ${deb_file} ${output}/split-deb-dev
+dpkg-deb --control ${deb_file} ${output}/split-deb-dev/DEBIAN
 
 function create_retail() {
 	retail_name=$(basename ${deb_file} | sed -e 's#-all##g')
 	
 	# copy package structure
-	rm -rf /tmp/split-deb-retail
-	mkdir /tmp/split-deb-retail
-	cp -rf /tmp/split-deb-dev/DEBIAN /tmp/split-deb-retail
+	rm -rf ${output}/split-deb-retail
+	mkdir ${output}/split-deb-retail
+	cp -rf ${output}/split-deb-dev/DEBIAN ${output}/split-deb-retail
 	
 	# modify control file
-	sed -i -e "s#\(Package: .*\)-all#\1#g" /tmp/split-deb-retail/DEBIAN/control
-	sed -i -e '/Installed-Size:.*/d' /tmp/split-deb-retail/DEBIAN/control
-	sed -i -e "s#\(Provides: .*\)-all#\1#g" /tmp/split-deb-retail/DEBIAN/control
+	sed -i -e "s#\(Package: .*\)-all#\1#g" ${output}/split-deb-retail/DEBIAN/control
+	sed -i -e '/Installed-Size:.*/d' ${output}/split-deb-retail/DEBIAN/control
+	sed -i -e "s#\(Provides: .*\)-all#\1#g" ${output}/split-deb-retail/DEBIAN/control
 	
 	# change dev dependancies to retail
-	while [ "_$(grep 'Depends:' /tmp/split-deb-retail/DEBIAN/control | grep -- '-dev')" != "_" ]
+	while [ "_$(grep 'Depends:' ${output}/split-deb-retail/DEBIAN/control | grep -- '-dev')" != "_" ]
 	do
-		sed -i -e "s#\(Depends: .*\)-dev\(.*\)#\1\2#g" /tmp/split-deb-retail/DEBIAN/control
+		sed -i -e "s#\(Depends: .*\)-dev\(.*\)#\1\2#g" ${output}/split-deb-retail/DEBIAN/control
 	done
 	
 	# copy so files
-	for file in $(find /tmp/split-deb-dev -name "*.so*" -o -name "*.a")
+	for file in $(find ${output}/split-deb-dev -name "*.so*" -o -name "*.a")
 	do
-		relfile=$(echo $file | sed "s#/tmp/split-deb-dev/##g")
+		relfile=$(echo $file | sed "s#${output}/split-deb-dev/##g")
 		path=$(dirname $relfile)
 		name=$(basename $relfile)
 		
-		mkdir -p /tmp/split-deb-retail/${path}
-		cp -a ${file} /tmp/split-deb-retail/${path}/
+		mkdir -p ${output}/split-deb-retail/${path}
+		cp -a ${file} ${output}/split-deb-retail/${path}/
 	done
 	
 	# create package
-	dpkg -b /tmp/split-deb-retail ${retail_name}
+	dpkg -b ${output}/split-deb-retail ${retail_name}
 }
 
 function create_dev() {
 	dev_name=$(basename ${deb_file} | sed -e 's#-all#-dev#g')
 	
 	# remove so from dev package
-	find /tmp/split-deb-dev -name "*.so*" -type f -exec rm -f {} \;
-	find /tmp/split-deb-dev -name "*.so*" -type l -exec rm -f {} \;
-	find /tmp/split-deb-dev -name "*.a" -type f -exec rm -f {} \;
+	find ${output}/split-deb-dev -name "*.so*" -type f -exec rm -f {} \;
+	find ${output}/split-deb-dev -name "*.so*" -type l -exec rm -f {} \;
+	find ${output}/split-deb-dev -name "*.a" -type f -exec rm -f {} \;
 		
 	# modify control file
-	retail_name=$(grep "Package:" /tmp/split-deb-dev/DEBIAN/control | sed -e "s#Package: \(.*\)-all#\1#g")
-	sed -i -e '/Installed-Size:.*/d' /tmp/split-deb-dev/DEBIAN/control
-	sed -i -e 's/-all/-dev/g' /tmp/split-deb-dev/DEBIAN/control
+	retail_name=$(grep "Package:" ${output}/split-deb-dev/DEBIAN/control | sed -e "s#Package: \(.*\)-all#\1#g")
+	sed -i -e '/Installed-Size:.*/d' ${output}/split-deb-dev/DEBIAN/control
+	sed -i -e 's/-all/-dev/g' ${output}/split-deb-dev/DEBIAN/control
 
 	# add dependency to retail package
-	if [ "_$(grep 'Depends:' /tmp/split-deb-dev/DEBIAN/control)" == "_" ]
+	if [ "_$(grep 'Depends:' ${output}/split-deb-dev/DEBIAN/control)" == "_" ]
 	then
-		echo "Depends: ${retail_name}" >> /tmp/split-deb-dev/DEBIAN/control
+		echo "Depends: ${retail_name}" >> ${output}/split-deb-dev/DEBIAN/control
 	else
-		sed -i -e "s#\(Depends:.*\)#\1,${retail_name}#g" /tmp/split-deb-dev/DEBIAN/control	
+		sed -i -e "s#\(Depends:.*\)#\1,${retail_name}#g" ${output}/split-deb-dev/DEBIAN/control	
 	fi
 	
 	# remove empty directories
-	while [ -n "$(find /tmp/split-deb-dev -depth -type d -empty -exec rmdir {} +)" ]; do :; done
+	while [ -n "$(find ${output}/split-deb-dev -depth -type d -empty -exec rmdir {} +)" ]; do :; done
 	
 	# create package
-	dpkg -b /tmp/split-deb-dev ${dev_name}
+	dpkg -b ${output}/split-deb-dev ${dev_name}
 }
 
 # create retail package
@@ -116,6 +118,5 @@ create_dev
 [ $install -eq 1 ] && dpkg -i ${deb_dev_file}
 
 # cleanup
-rm -rf /tmp/split-deb-dev
-rm -rf /tmp/split-deb-retail
+rm -rf ${output}
 
