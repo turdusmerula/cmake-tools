@@ -14,6 +14,7 @@ opt_package_dir=""
 opt_package_vendor=""
 opt_package_maintainer=""
 opt_package_depends=""
+opt_package_dev_depends=""
 opt_package_control_extra=""
 opt_package_description=""
 opt_help=0
@@ -57,6 +58,7 @@ function usage()
 	echo "  --package-vendor=<name>             = Override/define CPACK_PACKAGE_VENDOR" >&2
 	echo "  --package-maintainer=<mail>         = Override/define CPACK_DEBIAN_PACKAGE_MAINTAINER" >&2
 	echo "  --package-depends=<packages>        = Override/define CPACK_DEBIAN_PACKAGE_DEPENDS" >&2
+	echo "  --package-dev-depends=<packages>    = Override/define CPACK_DEBIAN_PACKAGE_DEV_DEPENDS" >&2
 	echo "  --package-control-extra=<scripts>   = Override/define CPACK_DEBIAN_PACKAGE_CONTROL_EXTRA" >&2
 	echo "  --package-description=<value>       = Override/define CPACK_PACKAGE_DESCRIPTION_SUMMARY" >&2
 	echo "  --help                              = Print usage information and exit" >&2
@@ -131,6 +133,14 @@ function read_config() {
 	fi
 	vecho "depends: $depends"
 
+	if [ "_$opt_package_dev_depends" == "_" ]
+	then
+		dev_depends=$(grep -e '(CPACK_DEBIAN_PACKAGE_DEV_DEPENDS ' ${opt_config} | sed -e "s#.*CPACK_DEBIAN_PACKAGE_DEV_DEPENDS \"\(.*\)\")#\1#g")
+	else
+		dev_depends=$opt_package_dev_depends
+	fi
+	vecho "dev_depends: $dev_depends"
+
 	if [ "_$opt_package_control_extra" == "_" ]
 	then
 		control_extra=$(grep -e '(CPACK_DEBIAN_PACKAGE_CONTROL_EXTRA ' ${opt_config} | sed -e "s#.*CPACK_DEBIAN_PACKAGE_CONTROL_EXTRA \"\(.*\)\")#\1#g")
@@ -185,6 +195,12 @@ function package() {
 	
 		output_dev=${output}/${name}-dev
 		output_retail=${output}/${name}
+		
+		if [ "_$dev_depends" == "_" ]
+		then
+			echo "ECPack: no dev dependencies given, no specialization for dev package"
+			dev_depends=$depends
+		fi
 		
 		# install files in retail package
 		DESTDIR=${output_retail} cmake $cmake_opts --build . --target install
@@ -248,7 +264,7 @@ function package() {
 		echo "Section: Development" >> ${output_dev}/DEBIAN/control
 		echo "Maintainer: $maintainer" >> ${output_dev}/DEBIAN/control
 		echo "Architecture: amd64" >> ${output_dev}/DEBIAN/control
-		echo "Depends: $name" >> ${output_dev}/DEBIAN/control
+		echo "Depends: $dev_depends, $name" >> ${output_dev}/DEBIAN/control
 		echo "Version: ${version}-${release}" >> ${output_dev}/DEBIAN/control
 		echo "Provides: $name" >> ${output_dev}/DEBIAN/control
 		echo "Description: $description" >> ${output_dev}/DEBIAN/control
