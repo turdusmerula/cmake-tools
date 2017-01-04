@@ -1,0 +1,3 @@
+#!/bin/bash
+
+docker images -a | grep "<none>" | sed "s#[[:space:]][[:space:]]*# #g" | cut -d' ' -f3 | xargs docker rmi -f

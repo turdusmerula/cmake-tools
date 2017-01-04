@@ -1,0 +1,33 @@
+#!/bin/bash
+
+xpl_path=$(cd -P -- "$(dirname -- "$0")" && pwd -P)
+
+function usage() {
+	echo "Usage: $0 <name regex>" >&2
+	echo >&2
+}
+
+if [ $# -ne 1 ]
+then
+	usage
+	exit 1
+fi
+
+name=$1
+
+runing=$(docker ps | sed "s#[[:space:]][[:space:]]*# #g" | grep -e " ${name}$" | cut -d' ' -f1 | grep -v CONTAINER)
+if [ "_$runing" != "_" ]
+then
+	echo "Killing runing: $runing"
+	docker stop $runing
+fi
+
+container=$(docker ps -a | sed "s#[[:space:]][[:space:]]*# #g" | grep -e " ${name}$" | cut -d' ' -f1 | grep -v CONTAINER)
+if [ "_$container" == "_" ]
+then
+	echo "No container corresponding to $1" >&2
+	exit 1
+else
+	echo "Removing container(s): $container"
+	docker rm $container
+fi
