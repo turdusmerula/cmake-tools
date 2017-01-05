@@ -1,3 +1,10 @@
 #!/bin/bash
 
-docker images -a | grep "<none>" | sed "s#[[:space:]][[:space:]]*# #g" | cut -d' ' -f3 | xargs docker rmi -f
+images=$(docker images -a | grep "<none>" | sed "s#[[:space:]][[:space:]]*# #g" | cut -d' ' -f3)
+if [ "_$runing" == "_" ]
+then
+	echo "No untagged image found"
+else
+	echo "Removing untagged images: $images"
+	docker rmi -f $images
+fi
