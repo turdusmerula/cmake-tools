@@ -289,21 +289,21 @@ function tgt_distclean()
 		ninja clean 
 	fi
 	
-    eval "find . -depth -type d -name CMakeFiles -print -exec rm -rf {} \;"
-    eval "find . -depth -type d -name _CPack_Packages -print -exec rm -rf {} \;"
-    eval "find . -depth -type d -name Testing -print -exec rm -rf {} \;"
-    eval "find . -depth -type f -name install_manifest.txt -print -exec rm -f {} \;"
-    eval "find . -depth -type f -name Makefile -print -exec rm -f {} \;"
-    eval "find . -depth -type f -name CMakeCache.txt -print -exec rm -f {} \;"
-    eval "find . -depth -type f -name cmake_install.cmake -print -exec rm -f {} \;"
-    eval "find . -depth -type f -name CTestConfig.cmake -print -exec rm -f {} \;"
-    eval "find . -depth -type f -name CTestTestfile.cmake -print -exec rm -f {} \;"
-    eval "find . -depth -type f -name DartConfiguration.tcl -print -exec rm -f {} \;"
-    eval "find . -depth -type f -name CPackConfig.cmake -print -exec rm -f {} \;"
-    eval "find . -depth -type f -name CPackSourceConfig.cmake -print -exec rm -f {} \;"
-    eval "find . -depth -type f -name build.ninja -print -exec rm -f {} \;"
-    eval "find . -depth -type f -name rules.ninja -print -exec rm -f {} \;"
-    eval "find . -depth -type f -name \".ninja_*\" -print -exec rm -f {} \;"
+    eval "find -L . -depth -type d -name CMakeFiles -print -exec rm -rf {} \;"
+    eval "find -L . -depth -type d -name _CPack_Packages -print -exec rm -rf {} \;"
+    eval "find -L . -depth -type d -name Testing -print -exec rm -rf {} \;"
+    eval "find -L . -depth -type f -name install_manifest.txt -print -exec rm -f {} \;"
+    eval "find -L . -depth -type f -name Makefile -print -exec rm -f {} \;"
+    eval "find -L . -depth -type f -name CMakeCache.txt -print -exec rm -f {} \;"
+    eval "find -L . -depth -type f -name cmake_install.cmake -print -exec rm -f {} \;"
+    eval "find -L . -depth -type f -name CTestConfig.cmake -print -exec rm -f {} \;"
+    eval "find -L . -depth -type f -name CTestTestfile.cmake -print -exec rm -f {} \;"
+    eval "find -L . -depth -type f -name DartConfiguration.tcl -print -exec rm -f {} \;"
+    eval "find -L . -depth -type f -name CPackConfig.cmake -print -exec rm -f {} \;"
+    eval "find -L . -depth -type f -name CPackSourceConfig.cmake -print -exec rm -f {} \;"
+    eval "find -L . -depth -type f -name build.ninja -print -exec rm -f {} \;"
+    eval "find -L . -depth -type f -name rules.ninja -print -exec rm -f {} \;"
+    eval "find -L . -depth -type f -name \".ninja_*\" -print -exec rm -f {} \;"
 }
 
 function tgt_eclipse()
