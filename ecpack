@@ -1,6 +1,5 @@
 #!/bin/bash 
 
-
 xpl_path=$(cd -P -- "$(dirname -- "$0")" && pwd -P)
 
 opt_mirror="localhost"
@@ -26,9 +25,10 @@ cmake_opts=""
 
 if [ $opt_debug -eq 1 ]
 then
+	export PATH=${xpl_path}/scripts:$PATH
 	scripts_path=${xpl_path}/scripts
 else
-	scripts_path=/usr/local/share/ecmake
+	scripts_path=/usr/local/share/cmake-tools
 fi
 
 function usage()
@@ -41,21 +41,23 @@ function usage()
 	echo >&2
 
     echo "Targets:"
-    echo "  package                      = Create package using checkinstall (default)" >&2
-    echo "  publish                      = Publish package to debian repository" >&2
+    echo "  package                             = Create package using selected generator" >&2
+    echo "  publish                             = Publish package to repository" >&2
 	echo >&2
 
 	echo "Package options:"
-	echo "  --mirror=url                        = Debian mirror repository url (default ${opt_mirror})" >&2
+	echo "  --mirror=url                        = Mirror repository url (default ${opt_mirror})" >&2
 	echo "  --repo=name                         = Repository to publish package (default ${opt_repo})" >&2
-	echo "  --ppa=name                          = Name of the ppa to connect with public key on server (default $opt_ppa)" >&2
+	echo "  --ppa=name                          = Name of the debian ppa to connect with public key on server (default $opt_ppa)" >&2
   	echo "  --config=<config file>              = Specify the config file (default ${opt_config})" >&2
-	echo "  --split=<on|off>                    = Split package into dev and retail version" >&2
+	echo "  --split=<on|off>                    = Split debian package into dev and retail version" >&2
 	echo "  --verbose                           = Enable verbose output" >&2
+	echo "  --generator=<name>                  = Override/define CPACK_GENERATOR" >&2
 	echo "  --package-name=<name>               = Override/define CPACK_PACKAGE_NAME" >&2
 	echo "  --package-version=<version>         = Override/define CPACK_PACKAGE_VERSION" >&2
 	echo "  --package-dir=<directory>           = Override/define CPACK_PACKAGE_DIRECTORY" >&2
 	echo "  --package-vendor=<name>             = Override/define CPACK_PACKAGE_VENDOR" >&2
+	echo "  --package-dockerfile=<file>         = Override/define CPACK_DOCKER_DOCKERFILE" >&2
 	echo "  --package-maintainer=<mail>         = Override/define CPACK_DEBIAN_PACKAGE_MAINTAINER" >&2
 	echo "  --package-depends=<packages>        = Override/define CPACK_DEBIAN_PACKAGE_DEPENDS" >&2
 	echo "  --package-dev-depends=<packages>    = Override/define CPACK_DEBIAN_PACKAGE_DEV_DEPENDS" >&2
@@ -65,6 +67,11 @@ function usage()
 	echo "  --version                           = Print version number and exit" >&2
 	echo >&2
 
+    echo "Generators:"
+    echo "  DEB                                 = Debian package using checkinstall" >&2
+    echo "  DOCKER                              = Docker package" >&2
+	echo >&2
+
 	exit 0
 }
 
@@ -72,7 +79,7 @@ function version() {
 	#TODO
 	echo "ecpack version 1.0.0"
 	echo
-	echo "cmake-tools suite maintained and supported by Sébastien Besombes."
+	echo "cmake-tools suite maintained and supported by Sebastien Besombes."
 	exit 0
 }
 
@@ -90,6 +97,14 @@ function read_config() {
 		exit 1
 	fi
 
+	if [ "_$opt_generator" == "_" ]
+	then
+		generator=$(grep -e '(CPACK_GENERATOR ' ${opt_config} | grep -v "#" | sed -e "s#.*CPACK_GENERATOR \"\(.*\)\")#\1#g")
+	else
+		name=$opt_package_generator
+	fi
+	vecho "generator: $generator"
+
 	if [ "_$opt_package_name" == "_" ]
 	then
 		name=$(grep -e '(CPACK_PACKAGE_NAME ' ${opt_config} | grep -v "#" | sed -e "s#.*CPACK_PACKAGE_NAME \"\(.*\)\")#\1#g")
@@ -105,191 +120,8 @@ function read_config() {
 		version=$opt_package_version
 	fi
 	vecho "version: $version"
-
-	release=$(${scripts_path}/package-next-release $opt_mirror $opt_ppa $opt_repo $name $version)
-	vecho "release: $release"
-	
-	if [ "_$opt_package_vendor" == "_" ]
-	then
-		vendor=$(grep -e '(CPACK_PACKAGE_VENDOR ' ${opt_config} | sed -e "s#.*CPACK_PACKAGE_VENDOR \"\(.*\)\")#\1#g")
-	else
-		vendor=$opt_package_vendor
-	fi
-	vecho "vendor: $vendor"
-	
-	if [ "_$opt_package_maintainer" == "_" ]
-	then
-		maintainer=$(grep -e '(CPACK_DEBIAN_PACKAGE_MAINTAINER ' ${opt_config} | sed -e "s#.*CPACK_DEBIAN_PACKAGE_MAINTAINER \"\(.*\)\")#\1#g")
-	else
-		maintainer=$opt_package_maintainer
-	fi
-	vecho "maintainer: $maintainer"
-
-	if [ "_$opt_package_depends" == "_" ]
-	then
-		depends=$(grep -e '(CPACK_DEBIAN_PACKAGE_DEPENDS ' ${opt_config} | sed -e "s#.*CPACK_DEBIAN_PACKAGE_DEPENDS \"\(.*\)\")#\1#g")
-	else
-		depends=$opt_package_depends
-	fi
-	vecho "depends: $depends"
-
-	if [ "_$opt_package_dev_depends" == "_" ]
-	then
-		dev_depends=$(grep -e '(CPACK_DEBIAN_PACKAGE_DEV_DEPENDS ' ${opt_config} | sed -e "s#.*CPACK_DEBIAN_PACKAGE_DEV_DEPENDS \"\(.*\)\")#\1#g")
-	else
-		dev_depends=$opt_package_dev_depends
-	fi
-	vecho "dev_depends: $dev_depends"
-
-	if [ "_$opt_package_control_extra" == "_" ]
-	then
-		control_extra=$(grep -e '(CPACK_DEBIAN_PACKAGE_CONTROL_EXTRA ' ${opt_config} | sed -e "s#.*CPACK_DEBIAN_PACKAGE_CONTROL_EXTRA \"\(.*\)\")#\1#g")
-	else
-		control_extra=$opt_package_control_extra
-	fi
-	vecho "control_extra: $control_extra"
-
-	if [ "_$opt_package_description" == "_" ]
-	then
-		description=$(grep -e '(CPACK_PACKAGE_DESCRIPTION_SUMMARY ' ${opt_config} | sed -e "s#.*CPACK_PACKAGE_DESCRIPTION_SUMMARY \"\(.*\)\")#\1#g")
-	else
-		description=$opt_package_description
-	fi
-	vecho "description: $description"
 }
 
-function package() {
-	echo "CPack: package $name-$version-$release"
-	
-	output=$(mktemp -d)
-	vecho "ECPack: temporary build dir in ${output}"
-
-	if [ $opt_split -eq 0 ]
-	then
-		pkgname=$name
-		DESTDIR=${output} cmake $cmake_opts --build . --target install
-		
-		# create control file
-		mkdir -p ${output}/DEBIAN
-		chmod 0755 ${output}/DEBIAN
-		echo "Package: $name" > ${output}/DEBIAN/control
-		echo "Priority: extra" >> ${output}/DEBIAN/control
-		echo "Section: Development" >> ${output}/DEBIAN/control
-		echo "Maintainer: $maintainer" >> ${output}/DEBIAN/control
-		echo "Architecture: amd64" >> ${output}/DEBIAN/control
-		echo "Depends: ${depends}" >> ${output}/DEBIAN/control
-		echo "Version: ${version}-${release}" >> ${output}/DEBIAN/control
-		echo "Provides: $name" >> ${output}/DEBIAN/control
-		echo "Description: $description" >> ${output}/DEBIAN/control
-		
-		if [ "_${control_extra}" != "_" ]
-		then
-			echo ${control_extra} | sed "s#;# #g" | xargs cp -t ${output}/DEBIAN
-			find ${output}/DEBIAN | xargs chmod 0755 
-		fi
-		
-		dpkg -b ${output} ${pkgname}_${version}-${release}_amd64.deb
-	else
-		mkdir -p ${output}/${name}-dev
-		mkdir -p ${output}/${name}
-	
-		output_dev=${output}/${name}-dev
-		output_retail=${output}/${name}
-		
-		if [ "_$dev_depends" == "_" ]
-		then
-			echo "ECPack: no dev dependencies given, no specialization for dev package"
-			dev_depends=$depends
-		fi
-		
-		# install files in retail package
-		DESTDIR=${output_retail} cmake $cmake_opts --build . --target install
-
-		## create retail package
-		mkdir -p ${output_retail}/DEBIAN
-		chmod 0755 ${output_retail}/DEBIAN
-		
-		# create control file
-		echo "Package: ${name}" > ${output_retail}/DEBIAN/control
-		echo "Priority: extra" >> ${output_retail}/DEBIAN/control
-		echo "Section: Development" >> ${output_retail}/DEBIAN/control
-		echo "Maintainer: $maintainer" >> ${output_retail}/DEBIAN/control
-		echo "Architecture: amd64" >> ${output_retail}/DEBIAN/control
-		echo "Depends: ${depends}" >> ${output_retail}/DEBIAN/control
-		echo "Version: ${version}-${release}" >> ${output_retail}/DEBIAN/control
-		echo "Provides: $name" >> ${output_retail}/DEBIAN/control
-		echo "Description: $description" >> ${output_retail}/DEBIAN/control
-		
-		if [ "_${control_extra}" != "_" ]
-		then
-			echo ${control_extra} | sed "s#;# #g" | xargs cp -t ${output_retail}/DEBIAN
-			find ${output_retail}/DEBIAN | xargs chmod 0755 
-		fi
-		
-		# mode include files
-		if [ -d ${output_retail}/usr/local/include ]
-		then
-			mkdir -p ${output_dev}/usr/local
-			mv ${output_retail}/usr/local/include ${output_dev}/usr/local
-		fi
-		
-		# package
-		dpkg -b ${output_retail} ${name}_${version}-${release}_amd64.deb
-		
-#		for file in $(find ${output_retail} -name "*.h*" -o -name "*.a")
-#		do
-#			relfile=$(echo $file | sed "s#${output_retail}/##g")
-#			path=$(dirname $relfile)
-#			name=$(basename $relfile)
-			
-#			mkdir -p ${output_retail}/${path}
-#			mv ${file} ${output_retail}/${path}/
-			
-			# remove empty directory hierarchy
-#			while [ "_$(ls -1 ${path}/)" == "_" ]
-#			do
-#				rmdir ${path}
-#				path=${path}/..
-#			done
-#		done
-		
-		
-		## create dev package
-		
-		# create control file
-		mkdir -p ${output_dev}/DEBIAN
-		chmod 0755 ${output_dev}/DEBIAN
-		echo "Package: ${name}-dev" > ${output_dev}/DEBIAN/control
-		echo "Priority: extra" >> ${output_dev}/DEBIAN/control
-		echo "Section: Development" >> ${output_dev}/DEBIAN/control
-		echo "Maintainer: $maintainer" >> ${output_dev}/DEBIAN/control
-		echo "Architecture: amd64" >> ${output_dev}/DEBIAN/control
-		echo "Depends: $dev_depends, $name" >> ${output_dev}/DEBIAN/control
-		echo "Version: ${version}-${release}" >> ${output_dev}/DEBIAN/control
-		echo "Provides: $name" >> ${output_dev}/DEBIAN/control
-		echo "Description: $description" >> ${output_dev}/DEBIAN/control
-		
-		# package
-		dpkg -b ${output_dev} ${name}-dev_${version}-${release}_amd64.deb
-	fi	
-	
-	# cleanup
-	if [ $opt_debug -eq 0 ]
-	then
-		rm -rf ${output}
-	fi
-}
-
-function publish() {
-	echo "CPack: publish $name-$version-$release"
-	
-	${scripts_path}/package-add $opt_mirror $opt_ppa $opt_repo ${name}_${version}-${release}_amd64.deb
-	
-	if [ $opt_split -eq 1 ]
-	then
-		${scripts_path}/package-add $opt_mirror $opt_ppa $opt_repo ${name}-dev_${version}-${release}_amd64.deb
-	fi
-}
 
 cpack_opts=""
 
@@ -318,6 +150,8 @@ do
 	    opt_config="${value_arg}"
 	elif [[ "$filt_arg" == "--verbose" ]]; then
 	    opt_verbose=1
+	elif [[ "$filt_arg" == "--generator" ]]; then
+	    opt_generator="${value_arg}"
 	elif [[ "$filt_arg" == "--split" ]]; then
 	    if [ "_${value_arg}" == "_on" ]; then 
 	    	opt_split=1
@@ -336,6 +170,8 @@ do
 	    opt_package_dir="${value_arg}"
 	elif [[ "$filt_arg" == "--package-vendor" ]]; then
 	    opt_package_vendor="${value_arg}"
+	elif [[ "$filt_arg" == "--package-dockerfile" ]]; then
+	    opt_package_dockerfile="${value_arg}"
 	elif [[ "$filt_arg" == "--package-maintainer" ]]; then
 	    opt_package_maintainer="${value_arg}"
 	elif [[ "$filt_arg" == "--package-depends" ]]; then
@@ -373,5 +209,19 @@ set -e
 
 echo "ECPack: checking config"
 read_config
+
+if [ "_$generator" == "_DEB" ]
+then
+	source ${scripts_path}/ecpack/ecpack-debian
+elif [ "_$generator" == "_DOCKER" ]
+then
+	source ${scripts_path}/ecpack/ecpack-docker
+else
+	echo "ECPack Error: Cannot initialize ECPack generator: $generator" >&2
+	exit 1
+fi
+
+read_generator_config
+
 [ $tgt_package -eq 1 ] && package
 [ $tgt_publish -eq 1 ] && publish

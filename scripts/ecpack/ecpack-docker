@@ -1,0 +1,24 @@
+function read_generator_config() {
+	if [ "_$opt_package_dockerfile" == "_" ]
+	then
+		dockerfile=$(grep -e '(CPACK_PACKAGE_DOCKER_DOCKERFILE ' ${opt_config} | sed -e "s#.*CPACK_PACKAGE_DOCKER_DOCKERFILE \"\(.*\)\")#\1#g")
+	else
+		dockerfile=$opt_package_dockerfile
+	fi
+	[ "_$dockerfile" != "_" ] && vecho "dockerfile: $dockerfile"
+	
+	return 0
+}
+
+function package() {
+	echo "CPack: package $name-$version"
+	
+	return 0
+}
+
+function publish() {
+	echo "CPack: publish $name-$version"
+	
+	return 0
+}
+
