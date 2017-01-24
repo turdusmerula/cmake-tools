@@ -1,8 +1,7 @@
 #!/bin/bash
-
-# Get the next release number of a package on repository
-
 set -e
+
+# Get the next available release number of a package on repository
 
 xpl_path=$(cd -P -- "$(dirname -- "$0")" && pwd -P)
 
@@ -20,8 +19,58 @@ then
 	exit 1
 fi
 
-release=$(${xpl_path}/package-release $*)
 
+mirror=""
+ppa=""
+repository=""
+package=""
+version=""
+while [[ "_$*" != "_" ]]
+do
+    if [ "_$(echo "$1" | grep '=')" != "_" ]
+    then
+        filt_arg="$(echo $1 | sed "s#\(.*\)=.*#\1#g")"
+        value_arg="$(echo $1 | sed "s#.*=\(.*\)#\1#g")"
+    else
+        filt_arg=$1
+        unset value_arg
+    fi
+
+	if [[ "$filt_arg" == "--distribution" ]]; then
+	    distribution=$value_arg
+	elif [[ "_$mirror" == "_" ]]; then
+	    mirror=$filt_arg
+	elif [[ "_$ppa" == "_" ]]; then
+	    ppa=$filt_arg
+	elif [[ "_$repository" == "_" ]]; then
+	    repository=$filt_arg
+	elif [[ "_$package" == "_" ]]; then
+	    package=$filt_arg
+	elif [[ "_$version" == "_" ]]; then
+	    version=$filt_arg
+	fi
+	
+	shift
+done
+
+${xpl_path}/ssh-publickey-check $ppa $mirror
+
+find_package=$(ssh ${ppa}@${mirror} aptly package search "'Name (${package}), \$Version (%${version}-*)'" 2>/dev/null | sort -r | head -n1)
+
+if [ "_${find_package}" == "_" ]
+then
+	echo 1
+	exit 0
+fi
+
+release=$(echo ${find_package} | sed "s#${package}_${version}-\([0-9]*\)_.*#\1#g")
+if [ "_${release}" == "_" ]
+then
+	echo "Extracting release failed from ${find_package}" >&2
+	exit 1
+fi
+
+# return result
 (( release = release + 1 ))
-
 echo $release
+exit 0
