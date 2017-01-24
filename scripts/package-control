@@ -1,0 +1,122 @@
+#!/bin/bash
+
+set -e
+
+function usage() {
+	echo "Usage: $0 [<options>] <debian file> <command>" >&2
+	echo >&2
+	echo "This script allow to manipulate a control files inside a debian package." >&2
+	echo "" >&2
+	echo "Options:" >&2
+	echo "  --force                      = force operation" >&2
+	echo "" >&2
+	echo "Commands:" >&2
+	echo "  list                         = list control files" >&2
+	echo "  add <files>                  = add a some control files" >&2
+	echo "  rm <files>                   = remove some control files" >&2
+	echo "  cat <file>     .             = show some control files content" >&2
+}
+
+if [ $# -ne 1 ]
+then
+	usage
+	exit 1
+fi
+
+deb_file=""
+opt_force=0
+cmd_list=0
+cmd_add=0
+cmd_rm=0
+cmd_cat=0
+opt_file_list=""
+cmd=0
+wait_files=0
+while [[ "_$*" != "_" ]]
+do
+    if [ "_$(echo "$1" | grep '=')" != "_" ]
+    then
+        filt_arg="$(echo $1 | sed "s#\(.*\)=.*#\1#g")"
+        value_arg="$(echo $1 | sed "s#.*=\(.*\)#\1#g")"
+    else
+        filt_arg=$1
+        unset value_arg
+    fi
+
+	if [[ "$filt_arg" == "--force" ]]; then
+	    opt_force=1
+	elif [[ "_$deb_file" == "_" ]]; then
+	    deb_file=$value_arg
+	elif [[ $cmd -eq 0 ]]; then
+		if [[ "$1" == "list" ]]; then
+			cmd_list=1
+		elif [[ "$1" == "add" ]]; then
+			cmd_add=1
+			wait_files=1
+		elif [[ "$1" == "rm" ]]; then
+			cmd_rm=1
+			wait_files=1
+		elif [[ "$1" == "cat" ]]; then
+			cmd_cat=1
+			wait_files=1
+		fi
+		cmd=1
+	elif [[ $wait_files -eq 1 ]]; then
+		opt_file_list="${opt_file_list},$1"
+	else
+		echo "Incorrect argument $1" >&2
+		usage
+		exit 1
+	fi
+	
+	shift
+done
+
+output=$(mktemp -d)
+
+function list() {
+	# unpack debian package
+	dpkg-deb --control ${deb_file} ${output}/DEBIAN
+
+	ls -1 ${output}/DEBIAN/
+}
+
+function add() {
+	# unpack debian package
+	dpkg-deb -x ${deb_file} ${output}
+	dpkg-deb --control ${deb_file} ${output}/DEBIAN
+
+	cp {$wait_files} ${output}/DEBIAN
+
+	# create package
+	dpkg -b ${output} ${deb_file}
+}
+
+function rm() {
+	# unpack debian package
+	dpkg-deb -x ${deb_file} ${output}
+	dpkg-deb --control ${deb_file} ${output}/DEBIAN
+
+	rm ${output}/DEBIAN/{$wait_files}
+
+	# create package
+	dpkg -b ${output} ${deb_file}
+
+}
+
+function list() {
+	# unpack debian package
+	dpkg-deb --control ${deb_file} ${output}/DEBIAN
+
+	cat ${output}/DEBIAN/{$wait_files}
+}
+
+#commands
+[ $cmd_list -eq 1 ] && list
+[ $cmd_add -eq 1 ] && add
+[ $cmd_rm -eq 1 ] && rm
+[ $cmd_cat -eq 1 ] && cat
+
+# cleanup
+rm -rf ${output}
+
