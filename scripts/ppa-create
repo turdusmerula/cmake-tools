@@ -4,6 +4,8 @@ set -e
 
 xpl_path=$(cd -P -- "$(dirname -- "$0")" && pwd -P)
 
+distribution=$(${xpl_path}/get-distribution)
+
 function usage() {
 	echo "Usage: $0 <ppa> [<options>]" >&2
 	echo >&2
@@ -12,6 +14,7 @@ function usage() {
 	echo "  --ssh                        = ppa has private ssh access" >&2
 	echo "  --http                       = ppa has public http access" >&2
 	echo "  --add                        = add ppa configuration to apt" >&2
+	echo "  --distribution=name          = change distribution (default=${distribution})" >&2
 	echo >&2
 	echo "Note: this scripts should be executed on the ppa hosting server" >2  
 }
@@ -46,6 +49,8 @@ do
 	    opt_http=1
 	elif [[ "$filt_arg" == "--add" ]]; then
 	    opt_add=1
+	elif [[ "$filt_arg" == "--distribution" ]]; then
+	    distribution=$value_arg
 	else
 	    ppa=$filt_arg
 	fi
@@ -81,7 +86,9 @@ chmod go-rwx .ssh/authorized_keys
 chmod u=rw .ssh/authorized_keys
 mkdir -p dropin
 aptly repo create stable >/dev/null 
+aptly publish repo -skip-signing=true -distribution=${distribution} -architectures=amd64 testing testing >/dev/null
 aptly repo create testing >/dev/null
+aptly publish repo -skip-signing=true -distribution=${distribution} -architectures=amd64 stable stable >/dev/null
 ESU
 # end sudo -------------
 
@@ -95,8 +102,8 @@ if [ $opt_ssh -eq 1 ]
 then
 	echo
 	echo "Configuration for ssh access: "
-	echo "deb [ arch=amd64 ] ssh://${ppa}@$(hostname)/home/${ppa}/.aptly/public/testing rosa main"
-	echo "deb [ arch=amd64 ] ssh://${ppa}@$(hostname)/home/${ppa}/.aptly/public/stable rosa main"
+	echo "deb [ arch=amd64 ] ssh://${ppa}@$(hostname)/home/${ppa}/.aptly/public/testing ${distribution} main"
+	echo "deb [ arch=amd64 ] ssh://${ppa}@$(hostname)/home/${ppa}/.aptly/public/stable ${distribution} main"
 	echo 
 	echo "Enable your publickey ssh access with the script ssh-copy-ids: "
 	echo "ssh-copy-ids ${ppa} $(hostname)"
